@@ -1,9 +1,45 @@
-import { Text, View } from "react-native";
+import { Formik } from "formik";
+import { Button, Text, TextInput, View } from "react-native";
+import * as Yup from "yup";
 
-export default function Index() {
+// Validation schema
+const ForgetPasswordSchema = Yup.object().shape({
+  email: Yup.string().email("Invalid email").required("Email is required"),
+});
+
+export default function ForgetPassword() {
+  const handleForgetPassword = async (values: { email: string }) => {
+    try {
+      //await sendPasswordResetEmail(values.email); // call your API here
+      alert("Password reset link sent to your email!");
+    } catch (error) {
+      alert("Failed to send reset link. Try again.");
+    }
+  };
+
   return (
-    <View>
-      <Text>forgetpass page.</Text>
-    </View>
+    <Formik
+      initialValues={{ email: "" }}
+      validationSchema={ForgetPasswordSchema}
+      onSubmit={handleForgetPassword}
+    >
+      {({ handleChange, handleSubmit, values, errors, touched, handleBlur }) => (
+        <View style={{ padding: 20 }}>
+          <Text>Email:</Text>
+          <TextInput
+            placeholder="Enter your email"
+            placeholderTextColor="grey"
+            onChangeText={handleChange("email")}
+            onBlur={handleBlur("email")}
+            value={values.email}
+            autoCapitalize="none"
+            style={{ borderWidth: 1, marginBottom: 5, padding: 5 }}
+          />
+          {touched.email && errors.email && <Text style={{ color: "red" }}>{errors.email}</Text>}
+
+          <Button title="Send Reset Link" color="#331584ff" onPress={handleSubmit as any} />
+        </View>
+      )}
+    </Formik>
   );
 }

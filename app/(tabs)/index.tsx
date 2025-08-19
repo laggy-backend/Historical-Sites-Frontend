@@ -5,7 +5,7 @@ export default function Index() {
   const user = false; 
 
   if (!user) {
-    return <Redirect href="/(auth)/login" />;
+    return <Redirect href="/(auth)/forgetpassword" />;
   }
 
   return (

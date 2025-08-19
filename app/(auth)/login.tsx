@@ -1,55 +1,58 @@
 import { loginUser } from "@/services/authService";
-import { useState } from "react";
+import { Formik } from "formik";
 import { Button, Text, TextInput, View } from "react-native";
+import * as Yup from "yup";
 
-export default function Index() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('');
+const LoginSchema = Yup.object().shape({
+  email: Yup.string().email("Invalid email").required("Email is required"),
+  password: Yup.string().required("Password is required"),
+});
 
-  const handleLogin = async () => {
-    setMessage("");
+export default function Login() {
+  const handleLogin = async (values: { email: string; password: string }) => {
     try {
-      await loginUser(email, password);
-      setMessage("Login Successful");
+      await loginUser(values.email, values.password);
+      alert("Login Successful");
     } catch (error) {
-      console.error(error);
-      setMessage("Login Failed. Check your credentials");
+      alert("Login Failed. Check your credentials");
     }
   };
 
   return (
-    <View style={{ padding: 20 }}>
-      <Text>Email:</Text>
-      <TextInput
-        placeholder="Enter your email"
-        placeholderTextColor="grey"
-        onChangeText={text => setEmail(text.toLowerCase())}
-        value={email}
-        style={{ borderWidth: 1, marginBottom: 10, padding: 5 }}
-      />
+    <Formik
+      initialValues={{ email: "", password: "" }}
+      validationSchema={LoginSchema}
+      onSubmit={handleLogin}
+    >
+      {({ handleChange, handleSubmit, values, errors, touched, handleBlur }) => (
+        <View style={{ padding: 20 }}>
+          <Text>Email:</Text>
+          <TextInput
+            placeholder="Enter your email"
+            placeholderTextColor="grey"
+            onChangeText={handleChange("email")}
+            onBlur={handleBlur("email")}
+            value={values.email}
+            autoCapitalize="none"
+            style={{ borderWidth: 1, marginBottom: 5, padding: 5 }}
+          />
+          {touched.email && errors.email && <Text style={{ color: "red" }}>{errors.email}</Text>}
 
-      <Text>Password:</Text>
-      <TextInput
-        placeholder="Enter your password"
-        placeholderTextColor="grey"
-        secureTextEntry
-        onChangeText={setPassword}
-        value={password}
-        style={{ borderWidth: 1, marginBottom: 10, padding: 5 }}
-      />
+          <Text>Password:</Text>
+          <TextInput
+            placeholder="Enter your password"
+            placeholderTextColor="grey"
+            secureTextEntry
+            onChangeText={handleChange("password")}
+            onBlur={handleBlur("password")}
+            value={values.password}
+            style={{ borderWidth: 1, marginBottom: 5, padding: 5 }}
+          />
+          {touched.password && errors.password && <Text style={{ color: "red" }}>{errors.password}</Text>}
 
-      <Button
-        title="Submit"
-        color="#331584ff"
-        onPress={handleLogin}
-      />
-
-      {message ? (
-        <Text style={{ marginTop: 10, color: message.includes('Failed') ? 'red' : 'green' }}>
-          {message}
-        </Text>
-      ) : null}
-    </View>
+          <Button title="Login" color="#331584ff" onPress={handleSubmit as any} />
+        </View>
+      )}
+    </Formik>
   );
 }
