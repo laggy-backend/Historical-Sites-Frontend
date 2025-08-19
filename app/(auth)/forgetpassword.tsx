@@ -11,7 +11,7 @@ const ForgetPasswordSchema = Yup.object().shape({
 export default function ForgetPassword() {
   const handleForgetPassword = async (values: { email: string }) => {
     try {
-      //await sendPasswordResetEmail(values.email); // call your API here
+      //await sendPasswordResetEmail(values.email); // 
       alert("Password reset link sent to your email!");
     } catch (error) {
       alert("Failed to send reset link. Try again.");
