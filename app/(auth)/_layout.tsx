@@ -7,7 +7,6 @@ export default function AuthRoutesLayout() {
   <Stack>
     <Stack.Screen name = "login" options={{headerShown: false}}></Stack.Screen>
     <Stack.Screen name = "register" options={{headerShown: false}}></Stack.Screen>
-    <Stack.Screen name = "forgetpassword" options={{headerShown: false}}></Stack.Screen>
   </Stack>
  )
 

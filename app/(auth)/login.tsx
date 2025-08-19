@@ -57,9 +57,6 @@ export default function Login() {
 
           {/* Links */}
           <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 15 }}>
-            <TouchableOpacity onPress={() => router.push("/forgetpassword")}>
-              <Text style={{ color: "blue" }}>Forget Password?</Text>
-            </TouchableOpacity>
             <TouchableOpacity onPress={() => router.push("/register")}>
               <Text style={{ color: "blue" }}>Register</Text>
             </TouchableOpacity>
