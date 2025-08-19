@@ -1,5 +1,7 @@
+import { registerUser } from "@/services/authService";
+import { router } from "expo-router";
 import { Formik } from "formik";
-import { Button, Text, TextInput, View } from "react-native";
+import { Button, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as Yup from "yup";
 
 // Validation schema
@@ -14,11 +16,32 @@ const RegisterSchema = Yup.object().shape({
 });
 
 export default function Register() {
-  const handleRegister = (values: any) => {
-    // call your API here
-    console.log("Register with:", values);
+const handleRegister = async (values: any) => {
+  try {
+    await registerUser(values.email, values.password, values.password2);
     alert("Registered successfully!");
-  };
+    router.push("/login");
+  } catch (error: any) {
+    console.error(error);
+
+    if (error.response && error.response.data) {
+      const data = error.response.data;
+
+      if (data.email) {
+        // Show email-specific error
+        alert(`Email error: ${data.email[0]}`);
+      } else if (data.password) {
+        alert(`Password error: ${data.password[0]}`);
+      } else {
+        alert("Registration failed. Please try again.");
+      }
+    } else {
+      alert("Registration failed. Please try again.");
+    }
+  }
+};
+
+
 
   return (
     <Formik
@@ -65,6 +88,12 @@ export default function Register() {
           {touched.password2 && errors.password2 && <Text style={{ color: "red" }}>{errors.password2}</Text>}
 
           <Button title="Register" color="#331584ff" onPress={handleSubmit as any} />
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 15 }}>
+          
+                    <TouchableOpacity onPress={() => router.push("/login")}>
+                                  <Text style={{ color: "blue" }}>Login?</Text>
+                                </TouchableOpacity>
+                  </View>
         </View>
       )}
     </Formik>

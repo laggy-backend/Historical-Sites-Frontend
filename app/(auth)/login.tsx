@@ -1,6 +1,7 @@
 import { loginUser } from "@/services/authService";
+import { useRouter } from "expo-router"; // for navigation
 import { Formik } from "formik";
-import { Button, Text, TextInput, View } from "react-native";
+import { Button, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as Yup from "yup";
 
 const LoginSchema = Yup.object().shape({
@@ -9,6 +10,8 @@ const LoginSchema = Yup.object().shape({
 });
 
 export default function Login() {
+  const router = useRouter();
+
   const handleLogin = async (values: { email: string; password: string }) => {
     try {
       await loginUser(values.email, values.password);
@@ -51,6 +54,16 @@ export default function Login() {
           {touched.password && errors.password && <Text style={{ color: "red" }}>{errors.password}</Text>}
 
           <Button title="Login" color="#331584ff" onPress={handleSubmit as any} />
+
+          {/* Links */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 15 }}>
+            <TouchableOpacity onPress={() => router.push("/forgetpassword")}>
+              <Text style={{ color: "blue" }}>Forget Password?</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push("/register")}>
+              <Text style={{ color: "blue" }}>Register</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </Formik>

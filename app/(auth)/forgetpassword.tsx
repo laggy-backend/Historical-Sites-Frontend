@@ -1,5 +1,6 @@
+import { router } from "expo-router";
 import { Formik } from "formik";
-import { Button, Text, TextInput, View } from "react-native";
+import { Button, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as Yup from "yup";
 
 // Validation schema
@@ -38,7 +39,14 @@ export default function ForgetPassword() {
           {touched.email && errors.email && <Text style={{ color: "red" }}>{errors.email}</Text>}
 
           <Button title="Send Reset Link" color="#331584ff" onPress={handleSubmit as any} />
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 15 }}>
+
+          <TouchableOpacity onPress={() => router.push("/login")}>
+                        <Text style={{ color: "blue" }}>Go back to login?</Text>
+                      </TouchableOpacity>
         </View>
+        </View>
+
       )}
     </Formik>
   );
