@@ -1,10 +1,11 @@
-import { registerUser } from "@/services/authService";
+// app/(auth)/register.tsx
+import { useAuth } from "@/contexts/AuthContext";
 import { router } from "expo-router";
 import { Formik } from "formik";
-import { Button, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Button, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as Yup from "yup";
 
-// Validation schema
 const RegisterSchema = Yup.object().shape({
   email: Yup.string().email("Invalid email").required("Email is required"),
   password: Yup.string()
@@ -16,86 +17,129 @@ const RegisterSchema = Yup.object().shape({
 });
 
 export default function Register() {
-const handleRegister = async (values: any) => {
-  try {
-    await registerUser(values.email, values.password, values.password2);
-    alert("Registered successfully!");
-    router.push("/login");
-  } catch (error: any) {
-    console.error(error);
+  const { register } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    if (error.response && error.response.data) {
-      const data = error.response.data;
+  const handleRegister = async (values: any) => {
+    try {
+      setIsSubmitting(true);
+      await register(values.email, values.password, values.password2);
+      // Navigation is handled in the AuthContext
+    } catch (error: any) {
+      console.error(error);
 
-      if (data.email) {
-        // Show email-specific error
-        alert(`Email error: ${data.email[0]}`);
-      } else if (data.password) {
-        alert(`Password error: ${data.password[0]}`);
+      if (error.response?.data) {
+        const data = error.response.data;
+
+        if (data.email) {
+          alert(`Email error: ${data.email[0]}`);
+        } else if (data.password) {
+          alert(`Password error: ${data.password[0]}`);
+        } else if (error.response.status === 429) {
+          alert("Too many registration attempts. Please try again later.");
+        } else {
+          alert("Registration failed. Please try again.");
+        }
       } else {
-        alert("Registration failed. Please try again.");
+        alert("Registration failed. Please check your connection.");
       }
-    } else {
-      alert("Registration failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
-  }
-};
-
-
+  };
 
   return (
-    <Formik
-      initialValues={{ email: "", password: "", password2: "" }}
-      validationSchema={RegisterSchema}
-      onSubmit={handleRegister}
-    >
-      {({ handleChange, handleSubmit, values, errors, touched, handleBlur }) => (
-        <View style={{ padding: 20 }}>
-          <Text>Email:</Text>
-          <TextInput
-            placeholder="Enter your email"
-            placeholderTextColor="grey"
-            onChangeText={handleChange("email")}
-            onBlur={handleBlur("email")}
-            value={values.email}
-            autoCapitalize="none"
-            style={{ borderWidth: 1, marginBottom: 5, padding: 5 }}
-          />
-          {touched.email && errors.email && <Text style={{ color: "red" }}>{errors.email}</Text>}
+    <View style={{ flex: 1, justifyContent: "center", padding: 20 }}>
+      <Text style={{ fontSize: 24, fontWeight: "bold", marginBottom: 30, textAlign: "center" }}>
+        Register
+      </Text>
+      
+      <Formik
+        initialValues={{ email: "", password: "", password2: "" }}
+        validationSchema={RegisterSchema}
+        onSubmit={handleRegister}
+      >
+        {({ handleChange, handleSubmit, values, errors, touched, handleBlur }) => (
+          <View>
+            <Text>Email:</Text>
+            <TextInput
+              placeholder="Enter your email"
+              placeholderTextColor="grey"
+              onChangeText={handleChange("email")}
+              onBlur={handleBlur("email")}
+              value={values.email}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              editable={!isSubmitting}
+              style={{ 
+                borderWidth: 1, 
+                marginBottom: 5, 
+                padding: 10, 
+                borderRadius: 5,
+                opacity: isSubmitting ? 0.5 : 1 
+              }}
+            />
+            {touched.email && errors.email && (
+              <Text style={{ color: "red", marginBottom: 10 }}>{errors.email}</Text>
+            )}
 
-          <Text>Password:</Text>
-          <TextInput
-            placeholder="Enter your password"
-            placeholderTextColor="grey"
-            secureTextEntry
-            onChangeText={handleChange("password")}
-            onBlur={handleBlur("password")}
-            value={values.password}
-            style={{ borderWidth: 1, marginBottom: 5, padding: 5 }}
-          />
-          {touched.password && errors.password && <Text style={{ color: "red" }}>{errors.password}</Text>}
+            <Text style={{ marginTop: 10 }}>Password:</Text>
+            <TextInput
+              placeholder="Enter your password"
+              placeholderTextColor="grey"
+              secureTextEntry
+              onChangeText={handleChange("password")}
+              onBlur={handleBlur("password")}
+              value={values.password}
+              editable={!isSubmitting}
+              style={{ 
+                borderWidth: 1, 
+                marginBottom: 5, 
+                padding: 10, 
+                borderRadius: 5,
+                opacity: isSubmitting ? 0.5 : 1 
+              }}
+            />
+            {touched.password && errors.password && (
+              <Text style={{ color: "red", marginBottom: 10 }}>{errors.password}</Text>
+            )}
 
-          <Text>Confirm Password:</Text>
-          <TextInput
-            placeholder="Re-enter your password"
-            placeholderTextColor="grey"
-            secureTextEntry
-            onChangeText={handleChange("password2")}
-            onBlur={handleBlur("password2")}
-            value={values.password2}
-            style={{ borderWidth: 1, marginBottom: 5, padding: 5 }}
-          />
-          {touched.password2 && errors.password2 && <Text style={{ color: "red" }}>{errors.password2}</Text>}
+            <Text style={{ marginTop: 10 }}>Confirm Password:</Text>
+            <TextInput
+              placeholder="Re-enter your password"
+              placeholderTextColor="grey"
+              secureTextEntry
+              onChangeText={handleChange("password2")}
+              onBlur={handleBlur("password2")}
+              value={values.password2}
+              editable={!isSubmitting}
+              style={{ 
+                borderWidth: 1, 
+                marginBottom: 5, 
+                padding: 10, 
+                borderRadius: 5,
+                opacity: isSubmitting ? 0.5 : 1 
+              }}
+            />
+            {touched.password2 && errors.password2 && (
+              <Text style={{ color: "red", marginBottom: 10 }}>{errors.password2}</Text>
+            )}
 
-          <Button title="Register" color="#331584ff" onPress={handleSubmit as any} />
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 15 }}>
-          
-                    <TouchableOpacity onPress={() => router.push("/login")}>
-                                  <Text style={{ color: "blue" }}>Login?</Text>
-                                </TouchableOpacity>
-                  </View>
-        </View>
-      )}
-    </Formik>
+            {isSubmitting ? (
+              <ActivityIndicator size="large" color="#331584ff" style={{ marginTop: 20 }} />
+            ) : (
+              <Button title="Register" color="#331584ff" onPress={handleSubmit as any} />
+            )}
+            
+            <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 20 }}>
+              <Text>Already have an account? </Text>
+              <TouchableOpacity onPress={() => router.push("/login")} disabled={isSubmitting}>
+                <Text style={{ color: "blue", textDecorationLine: "underline" }}>Login</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </Formik>
+    </View>
   );
 }
