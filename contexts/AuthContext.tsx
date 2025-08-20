@@ -107,11 +107,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (newAccessToken) {
               await fetchCurrentUser();
             } else {
-              // Refresh failed, clear everything
-              await logout();
+              // Refresh failed, clear everything but don't navigate
+              await clearAuthData();
             }
           } else {
-            await logout();
+            await clearAuthData();
           }
         }
       } else if (refreshToken) {
@@ -120,7 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (newAccessToken) {
           await fetchCurrentUser();
         } else {
-          await logout();
+          await clearAuthData();
         }
       }
     } catch (error) {
@@ -132,7 +132,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Login function
+  // Clear auth data without navigation
+  const clearAuthData = async () => {
+    await SecureStore.deleteItemAsync('access');
+    await SecureStore.deleteItemAsync('refresh');
+    removeAuthHeader();
+    setUser(null);
+    setIsAuthenticated(false);
+  };
+
+  // Login function - throws error on failure, navigates only on success
   const login = async (email: string, password: string) => {
     try {
       const response = await API.post(TOKEN_ENDPOINT, { email, password });
@@ -148,15 +157,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Fetch user data
       await fetchCurrentUser();
       
-      // Navigate to home
+      // Navigate to home ONLY on success
       router.replace('/(tabs)');
     } catch (error: any) {
       console.error('Login error:', error);
+      // Re-throw the error so the login component can handle it
+      // DO NOT change auth state or navigate on failure
       throw error;
     }
   };
 
-  // Register function
+  // Register function - throws error on failure, navigates only on success
   const register = async (email: string, password: string, password2: string) => {
     try {
       const response = await API.post(REGISTER_ENDPOINT, { email, password, password2 });
@@ -173,10 +184,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       setIsAuthenticated(true);
       
-      // Navigate to home
+      // Navigate to home ONLY on success
       router.replace('/(tabs)');
     } catch (error: any) {
       console.error('Register error:', error);
+      // Re-throw the error so the register component can handle it
+      // DO NOT change auth state or navigate on failure
       throw error;
     }
   };
@@ -198,13 +211,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Logout error:', error);
     } finally {
       // Clear local data regardless of API call success
-      await SecureStore.deleteItemAsync('access');
-      await SecureStore.deleteItemAsync('refresh');
-      removeAuthHeader();
-      setUser(null);
-      setIsAuthenticated(false);
+      await clearAuthData();
       
-      // Navigate to login
+      // Navigate to login only on explicit logout
       router.replace('/(auth)/login');
     }
   };
@@ -227,7 +236,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       async (error) => {
         const originalRequest = error.config;
         
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Only auto-refresh for authenticated requests (not login/register)
+        if (error.response?.status === 401 && 
+            !originalRequest._retry && 
+            !originalRequest.url?.includes(TOKEN_ENDPOINT) &&
+            !originalRequest.url?.includes(REGISTER_ENDPOINT)) {
           originalRequest._retry = true;
           
           const newAccessToken = await refreshAccessToken();
@@ -235,7 +248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
             return API(originalRequest);
           } else {
-            await logout();
+            // Don't logout automatically, let the component handle it
             return Promise.reject(error);
           }
         }
@@ -248,7 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       API.interceptors.request.eject(requestInterceptor);
       API.interceptors.response.eject(responseInterceptor);
     };
-  }, []);
+  }, [TOKEN_ENDPOINT, REGISTER_ENDPOINT]);
 
   // Check auth status on mount
   useEffect(() => {
