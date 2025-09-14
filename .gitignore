@@ -41,7 +41,3 @@ app-example
 # generated native folders
 /ios
 /android
-
-.DS_Store
-.DS_Store?
-**/.DS_Store
