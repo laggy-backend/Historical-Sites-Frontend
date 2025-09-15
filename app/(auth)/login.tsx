@@ -1,3 +1,5 @@
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,8 +13,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function Login() {
@@ -48,7 +48,7 @@ export default function Login() {
     setIsLoading(false);
 
     if (result.success) {
-      router.replace('/(protected)/');
+      router.replace('/(protected)');
     } else {
       Alert.alert('Login Failed', result.error || 'An error occurred');
     }
@@ -123,8 +123,11 @@ export default function Login() {
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
+          <Text style={styles.footerText}>Don&apos;t have an account? </Text>
+          <TouchableOpacity onPress={() => {
+            // TODO: Navigate to register when implemented
+            console.log('Register screen not implemented yet');
+          }}>
             <Text style={styles.linkText}>Sign Up</Text>
           </TouchableOpacity>
         </View>

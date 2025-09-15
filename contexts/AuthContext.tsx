@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import { API_ENDPOINTS, STORAGE_KEYS } from '../config';
+import apiClient, { apiHelpers } from '../services/api';
 
 interface User {
   id: number;
@@ -36,8 +39,6 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
-
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [authState, setAuthState] = useState<AuthState>({
     isLoading: true,
@@ -48,8 +49,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   });
 
   const clearAuthData = async () => {
-    await SecureStore.deleteItemAsync('accessToken');
-    await SecureStore.deleteItemAsync('refreshToken');
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
     setAuthState({
       isLoading: false,
       isAuthenticated: false,
@@ -61,52 +62,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/token/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      // Login request - don't use interceptor to avoid token attachment
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, {
+        email,
+        password,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        return {
-          success: false,
-          error: errorData.detail || 'Login failed'
-        };
-      }
-
-      const tokens = await response.json();
+      const tokens = response.data;
 
       // Store tokens securely
-      await SecureStore.setItemAsync('accessToken', tokens.access);
-      await SecureStore.setItemAsync('refreshToken', tokens.refresh);
+      await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, tokens.access);
+      await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh);
 
-      // Get user profile
-      const userResponse = await fetch(`${API_BASE_URL}/users/me/`, {
-        headers: {
-          'Authorization': `Bearer ${tokens.access}`,
-        },
+      // Get user profile (this will use the interceptor to attach token)
+      const userResponse = await apiClient.get(API_ENDPOINTS.USERS.ME);
+      const userData = userResponse.data;
+
+      setAuthState({
+        isLoading: false,
+        isAuthenticated: true,
+        user: userData.data,
+        accessToken: tokens.access,
+        refreshToken: tokens.refresh,
       });
-
-      if (userResponse.ok) {
-        const userData = await userResponse.json();
-        setAuthState({
-          isLoading: false,
-          isAuthenticated: true,
-          user: userData.data,
-          accessToken: tokens.access,
-          refreshToken: tokens.refresh,
-        });
-      }
 
       return { success: true };
     } catch (error) {
-      console.error('Login error:', error);
+      // Only log in development for cleaner production logs
+      if (__DEV__) {
+        console.warn('Login failed');
+      }
+      const axiosError = error as AxiosError;
       return {
         success: false,
-        error: 'Network error. Please check your connection.'
+        error: apiHelpers.getErrorMessage(axiosError)
       };
     }
   };
@@ -114,17 +103,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     try {
       if (authState.refreshToken) {
-        await fetch(`${API_BASE_URL}/auth/logout/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authState.accessToken}`,
-          },
-          body: JSON.stringify({ refresh: authState.refreshToken }),
+        await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT, {
+          refresh: authState.refreshToken
         });
       }
     } catch (error) {
-      console.error('Logout error:', error);
+      if (__DEV__) {
+        console.warn('Logout request failed (non-critical):', error);
+      }
     } finally {
       await clearAuthData();
     }
@@ -132,26 +118,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshAccessToken = async (): Promise<boolean> => {
     try {
-      const refreshToken = await SecureStore.getItemAsync('refreshToken');
+      const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
       if (!refreshToken) return false;
 
-      const response = await fetch(`${API_BASE_URL}/auth/token/refresh/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refresh: refreshToken }),
+      // Use direct axios call to avoid interceptor loop
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH, {
+        refresh: refreshToken
       });
 
-      if (!response.ok) {
-        await clearAuthData();
-        return false;
-      }
+      const tokens = response.data;
 
-      const tokens = await response.json();
-
-      await SecureStore.setItemAsync('accessToken', tokens.access);
-      await SecureStore.setItemAsync('refreshToken', tokens.refresh);
+      await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, tokens.access);
+      await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh);
 
       setAuthState(prev => ({
         ...prev,
@@ -161,7 +139,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       return true;
     } catch (error) {
-      console.error('Token refresh error:', error);
+      if (__DEV__) {
+        console.warn('Token refresh failed');
+      }
       await clearAuthData();
       return false;
     }
@@ -169,51 +149,60 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
-      const accessToken = await SecureStore.getItemAsync('accessToken');
-      const refreshToken = await SecureStore.getItemAsync('refreshToken');
+      const accessToken = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+      const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
 
       if (!accessToken || !refreshToken) {
         setAuthState(prev => ({ ...prev, isLoading: false }));
         return;
       }
 
-      // Verify token
-      const verifyResponse = await fetch(`${API_BASE_URL}/auth/token/verify/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token: accessToken }),
-      });
-
-      if (verifyResponse.ok) {
-        // Get user profile
-        const userResponse = await fetch(`${API_BASE_URL}/users/me/`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-          },
+      try {
+        // Verify token
+        await apiClient.post(API_ENDPOINTS.AUTH.VERIFY, {
+          token: accessToken
         });
 
-        if (userResponse.ok) {
-          const userData = await userResponse.json();
-          setAuthState({
-            isLoading: false,
-            isAuthenticated: true,
-            user: userData.data,
-            accessToken,
-            refreshToken,
-          });
-          return;
+        // Get user profile
+        const userResponse = await apiClient.get(API_ENDPOINTS.USERS.ME);
+        const userData = userResponse.data;
+
+        setAuthState({
+          isLoading: false,
+          isAuthenticated: true,
+          user: userData.data,
+          accessToken,
+          refreshToken,
+        });
+        return;
+      } catch (verifyError) {
+        // Token invalid, try refresh
+        const refreshed = await refreshAccessToken();
+        if (!refreshed) {
+          setAuthState(prev => ({ ...prev, isLoading: false }));
+        } else {
+          // After successful refresh, get user profile
+          try {
+            const userResponse = await apiClient.get(API_ENDPOINTS.USERS.ME);
+            const userData = userResponse.data;
+            setAuthState(prev => ({
+              ...prev,
+              isLoading: false,
+              isAuthenticated: true,
+              user: userData.data,
+            }));
+          } catch (userError) {
+            if (__DEV__) {
+              console.warn('Failed to get user after refresh');
+            }
+            await clearAuthData();
+          }
         }
       }
-
-      // Token invalid, try refresh
-      const refreshed = await refreshAccessToken();
-      if (!refreshed) {
-        setAuthState(prev => ({ ...prev, isLoading: false }));
-      }
     } catch (error) {
-      console.error('Auth check error:', error);
+      if (__DEV__) {
+        console.warn('Auth status check failed');
+      }
       setAuthState(prev => ({ ...prev, isLoading: false }));
     }
   };
