@@ -6,12 +6,14 @@
 import { TextStyle, ViewStyle } from 'react-native';
 import { Theme } from '../theme/variants';
 import { createInputBase, createTypography } from '../utils/mixins';
+import { InputStyleType } from '../../types/api';
 
 export type InputVariant = 'default' | 'filled' | 'outline';
 export type InputSize = 'sm' | 'md' | 'lg';
 
 /**
  * Creates input container styles based on variant and state
+ * Returns a style that works with TextInput (compatible with both ViewStyle and TextStyle)
  */
 export const createInputStyle = (
   theme: Theme,
@@ -20,7 +22,7 @@ export const createInputStyle = (
   hasError: boolean = false,
   isFocused: boolean = false,
   disabled: boolean = false
-): ViewStyle => {
+): InputStyleType => {
   const baseStyle = createInputBase(theme);
 
   // Size variations

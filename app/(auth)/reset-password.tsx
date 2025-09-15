@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_ENDPOINTS } from '../../config';
 import apiClient, { apiHelpers } from '../../services/api';
+import { logger } from '../../utils/logger';
 import {
   useTheme,
   createStyles,
@@ -115,10 +116,9 @@ export default function ResetPassword() {
         Alert.alert('Reset Failed', data.error?.message || 'Failed to send reset email');
       }
     } catch (error) {
-      if (__DEV__) {
-        console.warn('Password reset failed');
-      }
-      Alert.alert('Reset Failed', apiHelpers.getErrorMessage(error as any));
+      const apiError = error as Error;
+      logger.authFailure('Password reset', apiHelpers.getErrorMessage(apiError), email);
+      Alert.alert('Reset Failed', apiHelpers.getUserFriendlyMessage(apiError));
     } finally {
       setIsLoading(false);
     }
@@ -195,7 +195,7 @@ export default function ResetPassword() {
                     !!errors.email,
                     focusedField === 'email',
                     isLoading
-                  ) as any,
+                  ),
                   createInputTextStyle(theme, 'md', isLoading)
                 ]}
                 placeholder="Enter your email"

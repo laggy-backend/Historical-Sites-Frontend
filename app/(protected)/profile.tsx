@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_ENDPOINTS } from '../../config';
 import apiClient, { apiHelpers } from '../../services/api';
+import { logger } from '../../utils/logger';
 import {
   createButtonStyle,
   createButtonTextStyle,
@@ -182,9 +183,7 @@ export default function Profile() {
         setProfile(userData.data);
       }
     } catch (error) {
-      if (__DEV__) {
-        console.warn('Failed to fetch user profile:', error);
-      }
+      logger.warn('api', 'Failed to fetch user profile', { error: (error as Error).message });
       Alert.alert('Error', 'Failed to refresh profile data');
     } finally {
       setIsLoading(false);

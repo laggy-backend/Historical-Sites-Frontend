@@ -3,6 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { API_ENDPOINTS, STORAGE_KEYS } from '../config';
 import apiClient, { apiHelpers } from '../services/api';
+import { AuthResult, AuthResponse, ApiError } from '../types/api';
+import { logger } from '../utils/logger';
 
 interface User {
   id: number;
@@ -20,8 +22,8 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  register: (email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<boolean>;
 }
@@ -61,8 +63,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<AuthResult> => {
     try {
+      logger.info('auth', 'Login attempt started', { email });
+
       // Login request - don't use interceptor to avoid token attachment
       const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, {
         email,
@@ -87,22 +91,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         refreshToken: tokens.refresh,
       });
 
+      logger.authSuccess('Login', userData.data.id);
       return { success: true };
     } catch (error) {
-      // Only log in development for cleaner production logs
-      if (__DEV__) {
-        console.warn('Login failed');
-      }
-      const axiosError = error as AxiosError;
+      const apiError = error as AxiosError | ApiError;
+      logger.authFailure('Login', apiHelpers.getErrorMessage(apiError), email);
+
       return {
         success: false,
-        error: apiHelpers.getErrorMessage(axiosError)
+        error: apiHelpers.getUserFriendlyMessage(apiError)
       };
     }
   };
 
-  const register = async (email: string, password: string) => {
+  const register = async (email: string, password: string): Promise<AuthResult> => {
     try {
+      logger.info('auth', 'Registration attempt started', { email });
+
       // Registration request - don't use interceptor to avoid token attachment
       const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, {
         email,
@@ -127,22 +132,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           refreshToken: tokens.refresh,
         });
 
+        logger.authSuccess('Registration', user.id);
         return { success: true };
       } else {
+        const errorMessage = registrationData.error?.message || 'Registration failed';
+        logger.authFailure('Registration', errorMessage, email);
         return {
           success: false,
-          error: registrationData.error?.message || 'Registration failed'
+          error: errorMessage
         };
       }
     } catch (error) {
-      // Only log in development for cleaner production logs
-      if (__DEV__) {
-        console.warn('Registration failed');
-      }
-      const axiosError = error as AxiosError;
+      const apiError = error as AxiosError | ApiError;
+      logger.authFailure('Registration', apiHelpers.getErrorMessage(apiError), email);
+
       return {
         success: false,
-        error: apiHelpers.getErrorMessage(axiosError)
+        error: apiHelpers.getUserFriendlyMessage(apiError)
       };
     }
   };
@@ -155,9 +161,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         });
       }
     } catch (error) {
-      if (__DEV__) {
-        console.warn('Logout request failed (non-critical):', error);
-      }
+      logger.warn('auth', 'Logout request failed (non-critical)', { error: (error as Error).message });
     } finally {
       await clearAuthData();
     }
@@ -186,9 +190,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       return true;
     } catch (error) {
-      if (__DEV__) {
-        console.warn('Token refresh failed');
-      }
+      logger.warn('auth', 'Token refresh failed', { error: (error as Error).message });
       await clearAuthData();
       return false;
     }
@@ -239,17 +241,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               user: userData.data,
             }));
           } catch (userError) {
-            if (__DEV__) {
-              console.warn('Failed to get user after refresh');
-            }
+            logger.warn('auth', 'Failed to get user after refresh', { error: (userError as Error).message });
             await clearAuthData();
           }
         }
       }
     } catch (error) {
-      if (__DEV__) {
-        console.warn('Auth status check failed');
-      }
+      logger.warn('auth', 'Auth status check failed', { error: (error as Error).message });
       setAuthState(prev => ({ ...prev, isLoading: false }));
     }
   };

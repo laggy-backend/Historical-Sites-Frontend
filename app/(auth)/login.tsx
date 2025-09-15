@@ -123,7 +123,7 @@ export default function Login() {
                     !!errors.email,
                     focusedField === 'email',
                     isLoading
-                  ) as any,
+                  ),
                   createInputTextStyle(theme, 'md', isLoading)
                 ]}
                 placeholder="Enter your email"
@@ -158,7 +158,7 @@ export default function Login() {
                     !!errors.password,
                     focusedField === 'password',
                     isLoading
-                  ) as any,
+                  ),
                   createInputTextStyle(theme, 'md', isLoading)
                 ]}
                 placeholder="Enter your password"

@@ -145,7 +145,7 @@ export default function Register() {
                     !!errors.email,
                     focusedField === 'email',
                     isLoading
-                  ) as any,
+                  ),
                   createInputTextStyle(theme, 'md', isLoading)
                 ]}
                 placeholder="Enter your email"
@@ -180,7 +180,7 @@ export default function Register() {
                     !!errors.password,
                     focusedField === 'password',
                     isLoading
-                  ) as any,
+                  ),
                   createInputTextStyle(theme, 'md', isLoading)
                 ]}
                 placeholder="Create a secure password"
@@ -218,7 +218,7 @@ export default function Register() {
                     !!errors.confirmPassword,
                     focusedField === 'confirmPassword',
                     isLoading
-                  ) as any,
+                  ),
                   createInputTextStyle(theme, 'md', isLoading)
                 ]}
                 placeholder="Confirm your password"
