@@ -5,6 +5,7 @@
 
 export const API_ENDPOINTS = {
   AUTH: {
+    REGISTER: '/auth/register/',
     LOGIN: '/auth/token/',
     REFRESH: '/auth/token/refresh/',
     VERIFY: '/auth/token/verify/',

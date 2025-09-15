@@ -14,28 +14,33 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+  useTheme,
+  createStyles,
   createButtonStyle,
   createButtonTextStyle,
-  createInputErrorStyle,
-  createInputLabelStyle,
   createInputStyle,
   createInputTextStyle,
-  createStyles,
+  createInputLabelStyle,
+  createInputErrorStyle,
+  getPlaceholderColor,
   createTypographyStyle,
   flexFull,
-  getPlaceholderColor,
-  rowCenter,
-  useTheme
+  rowCenter
 } from '../../styles';
 
-export default function Login() {
+export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+  }>({});
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  const { login } = useAuth();
+  const { register } = useAuth();
   const { theme } = useTheme();
   const styles = createStyles((theme) => ({
     container: {
@@ -68,33 +73,50 @@ export default function Login() {
   }))(theme);
 
   const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {};
+    const newErrors: {
+      email?: string;
+      password?: string;
+      confirmPassword?: string;
+    } = {};
 
+    // Email validation
     if (!email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(email)) {
       newErrors.email = 'Please enter a valid email address';
     }
 
+    // Password validation (more comprehensive for registration)
     if (!password.trim()) {
       newErrors.password = 'Password is required';
+    } else if (password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters long';
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+      newErrors.password = 'Password must contain uppercase, lowercase, and numbers';
+    }
+
+    // Confirm password validation
+    if (!confirmPassword.trim()) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (password !== confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleLogin = async () => {
+  const handleRegister = async () => {
     if (!validateForm()) return;
 
     setIsLoading(true);
-    const result = await login(email.toLowerCase().trim(), password);
+    const result = await register(email.toLowerCase().trim(), password);
     setIsLoading(false);
 
     if (result.success) {
       router.replace('/(protected)');
     } else {
-      Alert.alert('Login Failed', result.error || 'An error occurred');
+      Alert.alert('Registration Failed', result.error || 'An error occurred');
     }
   };
 
@@ -107,8 +129,8 @@ export default function Login() {
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={createTypographyStyle(theme, 'h1')}>Welcome Back</Text>
-            <Text style={createTypographyStyle(theme, 'body')}>Sign in to access historical sites</Text>
+            <Text style={createTypographyStyle(theme, 'h1')}>Create Account</Text>
+            <Text style={createTypographyStyle(theme, 'body')}>Join the historical sites community</Text>
           </View>
 
           <View style={styles.form}>
@@ -161,7 +183,7 @@ export default function Login() {
                   ) as any,
                   createInputTextStyle(theme, 'md', isLoading)
                 ]}
-                placeholder="Enter your password"
+                placeholder="Create a secure password"
                 placeholderTextColor={getPlaceholderColor(theme)}
                 value={password}
                 onChangeText={(text) => {
@@ -169,11 +191,15 @@ export default function Login() {
                   if (errors.password) {
                     setErrors(prev => ({ ...prev, password: undefined }));
                   }
+                  // Also clear confirm password error if passwords now match
+                  if (errors.confirmPassword && text === confirmPassword) {
+                    setErrors(prev => ({ ...prev, confirmPassword: undefined }));
+                  }
                 }}
                 onFocus={() => setFocusedField('password')}
                 onBlur={() => setFocusedField(null)}
                 secureTextEntry
-                autoComplete="password"
+                autoComplete="new-password"
                 editable={!isLoading}
               />
               {errors.password && (
@@ -181,27 +207,61 @@ export default function Login() {
               )}
             </View>
 
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.confirmPassword, isLoading)}>Confirm Password</Text>
+              <TextInput
+                style={[
+                  createInputStyle(
+                    theme,
+                    'default',
+                    'md',
+                    !!errors.confirmPassword,
+                    focusedField === 'confirmPassword',
+                    isLoading
+                  ) as any,
+                  createInputTextStyle(theme, 'md', isLoading)
+                ]}
+                placeholder="Confirm your password"
+                placeholderTextColor={getPlaceholderColor(theme)}
+                value={confirmPassword}
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
+                  if (errors.confirmPassword) {
+                    setErrors(prev => ({ ...prev, confirmPassword: undefined }));
+                  }
+                }}
+                onFocus={() => setFocusedField('confirmPassword')}
+                onBlur={() => setFocusedField(null)}
+                secureTextEntry
+                autoComplete="new-password"
+                editable={!isLoading}
+              />
+              {errors.confirmPassword && (
+                <Text style={createInputErrorStyle(theme)}>{errors.confirmPassword}</Text>
+              )}
+            </View>
+
             <TouchableOpacity
               style={createButtonStyle(theme, 'primary', 'md', isLoading)}
-              onPress={handleLogin}
+              onPress={handleRegister}
               disabled={isLoading}
             >
               {isLoading ? (
                 <ActivityIndicator color={theme.colors.textInverse} />
               ) : (
                 <Text style={createButtonTextStyle(theme, 'primary', 'md', isLoading)}>
-                  Sign In
+                  Create Account
                 </Text>
               )}
             </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
-            <Text style={createTypographyStyle(theme, 'body')}>Don&apos;t have an account? </Text>
+            <Text style={createTypographyStyle(theme, 'body')}>Already have an account? </Text>
             <TouchableOpacity onPress={() => {
-              router.push('/(auth)/register');
+              router.push('/(auth)/login');
             }}>
-              <Text style={createTypographyStyle(theme, 'link')}>Sign Up</Text>
+              <Text style={createTypographyStyle(theme, 'link')}>Sign In</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -209,4 +269,3 @@ export default function Login() {
     </SafeAreaView>
   );
 }
-

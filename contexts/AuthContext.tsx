@@ -21,6 +21,7 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<boolean>;
 }
@@ -91,6 +92,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Only log in development for cleaner production logs
       if (__DEV__) {
         console.warn('Login failed');
+      }
+      const axiosError = error as AxiosError;
+      return {
+        success: false,
+        error: apiHelpers.getErrorMessage(axiosError)
+      };
+    }
+  };
+
+  const register = async (email: string, password: string) => {
+    try {
+      // Registration request - don't use interceptor to avoid token attachment
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, {
+        email,
+        password,
+      });
+
+      const registrationData = response.data;
+
+      if (registrationData.success) {
+        // Registration returns both user data and tokens
+        const { user, tokens } = registrationData.data;
+
+        // Store tokens securely
+        await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, tokens.access);
+        await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh);
+
+        setAuthState({
+          isLoading: false,
+          isAuthenticated: true,
+          user: user,
+          accessToken: tokens.access,
+          refreshToken: tokens.refresh,
+        });
+
+        return { success: true };
+      } else {
+        return {
+          success: false,
+          error: registrationData.error?.message || 'Registration failed'
+        };
+      }
+    } catch (error) {
+      // Only log in development for cleaner production logs
+      if (__DEV__) {
+        console.warn('Registration failed');
       }
       const axiosError = error as AxiosError;
       return {
@@ -215,6 +262,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     <AuthContext.Provider value={{
       ...authState,
       login,
+      register,
       logout,
       refreshAccessToken,
     }}>
