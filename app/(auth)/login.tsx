@@ -6,7 +6,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -14,14 +13,59 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  createButtonStyle,
+  createButtonTextStyle,
+  createInputErrorStyle,
+  createInputLabelStyle,
+  createInputStyle,
+  createInputTextStyle,
+  createStyles,
+  createTypographyStyle,
+  flexFull,
+  getPlaceholderColor,
+  rowCenter,
+  useTheme
+} from '../../styles';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const { login } = useAuth();
+  const { theme } = useTheme();
+  const styles = createStyles((theme) => ({
+    container: {
+      ...flexFull,
+      backgroundColor: theme.colors.background,
+    },
+    keyboardContainer: {
+      ...flexFull,
+    },
+    content: {
+      ...flexFull,
+      paddingHorizontal: theme.spacing.lg,
+      justifyContent: 'center',
+    },
+    header: {
+      alignItems: 'center',
+      marginBottom: theme.spacing.xxl,
+    },
+    form: {
+      gap: theme.spacing.lg,
+      marginBottom: theme.spacing.xl,
+    },
+    inputContainer: {
+      gap: theme.spacing.sm,
+    },
+    footer: {
+      ...rowCenter,
+      justifyContent: 'center',
+    },
+  }))(theme);
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {};
@@ -56,174 +100,114 @@ export default function Login() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardContainer}
       >
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to access historical sites</Text>
-        </View>
-
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={[styles.input, errors.email && styles.inputError]}
-              placeholder="Enter your email"
-              placeholderTextColor="#9CA3AF"
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                if (errors.email) {
-                  setErrors(prev => ({ ...prev, email: undefined }));
-                }
-              }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              editable={!isLoading}
-            />
-            {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={createTypographyStyle(theme, 'h1')}>Welcome Back</Text>
+            <Text style={createTypographyStyle(theme, 'body')}>Sign in to access historical sites</Text>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={[styles.input, errors.password && styles.inputError]}
-              placeholder="Enter your password"
-              placeholderTextColor="#9CA3AF"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                if (errors.password) {
-                  setErrors(prev => ({ ...prev, password: undefined }));
-                }
-              }}
-              secureTextEntry
-              autoComplete="password"
-              editable={!isLoading}
-            />
-            {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+          <View style={styles.form}>
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.email, isLoading)}>Email</Text>
+              <TextInput
+                style={[
+                  createInputStyle(
+                    theme,
+                    'default',
+                    'md',
+                    !!errors.email,
+                    focusedField === 'email',
+                    isLoading
+                  ),
+                  createInputTextStyle(theme, 'md', isLoading)
+                ]}
+                placeholder="Enter your email"
+                placeholderTextColor={getPlaceholderColor(theme)}
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (errors.email) {
+                    setErrors(prev => ({ ...prev, email: undefined }));
+                  }
+                }}
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => setFocusedField(null)}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                editable={!isLoading}
+              />
+              {errors.email && (
+                <Text style={createInputErrorStyle(theme)}>{errors.email}</Text>
+              )}
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.password, isLoading)}>Password</Text>
+              <TextInput
+                style={[
+                  createInputStyle(
+                    theme,
+                    'default',
+                    'md',
+                    !!errors.password,
+                    focusedField === 'password',
+                    isLoading
+                  ),
+                  createInputTextStyle(theme, 'md', isLoading)
+                ]}
+                placeholder="Enter your password"
+                placeholderTextColor={getPlaceholderColor(theme)}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (errors.password) {
+                    setErrors(prev => ({ ...prev, password: undefined }));
+                  }
+                }}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField(null)}
+                secureTextEntry
+                autoComplete="password"
+                editable={!isLoading}
+              />
+              {errors.password && (
+                <Text style={createInputErrorStyle(theme)}>{errors.password}</Text>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={createButtonStyle(theme, 'primary', 'md', isLoading)}
+              onPress={handleLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={theme.colors.textInverse} />
+              ) : (
+                <Text style={createButtonTextStyle(theme, 'primary', 'md', isLoading)}>
+                  Sign In
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.loginButtonText}>Sign In</Text>
-            )}
-          </TouchableOpacity>
+          <View style={styles.footer}>
+            <Text style={createTypographyStyle(theme, 'body')}>Don&apos;t have an account? </Text>
+            <TouchableOpacity onPress={() => {
+              // TODO: Navigate to register when implemented
+              console.log('Register screen not implemented yet');
+            }}>
+              <Text style={createTypographyStyle(theme, 'link')}>Sign Up</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Don&apos;t have an account? </Text>
-          <TouchableOpacity onPress={() => {
-            // TODO: Navigate to register when implemented
-            console.log('Register screen not implemented yet');
-          }}>
-            <Text style={styles.linkText}>Sign Up</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  keyboardContainer: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: 'center',
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  form: {
-    gap: 24,
-    marginBottom: 32,
-  },
-  inputContainer: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    backgroundColor: '#F9FAFB',
-    color: '#1F2937',
-  },
-  inputError: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#EF4444',
-    marginTop: 4,
-  },
-  loginButton: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  loginButtonDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
-  loginButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footerText: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  linkText: {
-    fontSize: 16,
-    color: '#3B82F6',
-    fontWeight: '600',
-  },
-});
