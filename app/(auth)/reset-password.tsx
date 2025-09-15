@@ -12,30 +12,30 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../../contexts/AuthContext';
+import { API_ENDPOINTS } from '../../config';
+import apiClient, { apiHelpers } from '../../services/api';
 import {
+  useTheme,
+  createStyles,
   createButtonStyle,
   createButtonTextStyle,
-  createInputErrorStyle,
-  createInputLabelStyle,
   createInputStyle,
   createInputTextStyle,
-  createStyles,
+  createInputLabelStyle,
+  createInputErrorStyle,
+  getPlaceholderColor,
   createTypographyStyle,
   flexFull,
-  getPlaceholderColor,
-  rowCenter,
-  useTheme
+  rowCenter
 } from '../../styles';
 
-export default function Login() {
+export default function ResetPassword() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string }>({});
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  const { login } = useAuth();
   const { theme } = useTheme();
   const styles = createStyles((theme) => ({
     container: {
@@ -65,10 +65,28 @@ export default function Login() {
       ...rowCenter,
       justifyContent: 'center',
     },
+    successContainer: {
+      alignItems: 'center',
+      paddingVertical: theme.spacing.xl,
+      gap: theme.spacing.md,
+    },
+    successText: {
+      ...createTypographyStyle(theme, 'body'),
+      color: theme.colors.success,
+      textAlign: 'center',
+      lineHeight: theme.lineHeight.relaxed,
+    },
+    instructionText: {
+      ...createTypographyStyle(theme, 'body'),
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: theme.lineHeight.relaxed,
+      marginBottom: theme.spacing.lg,
+    },
   }))(theme);
 
   const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {};
+    const newErrors: { email?: string } = {};
 
     if (!email.trim()) {
       newErrors.email = 'Email is required';
@@ -76,27 +94,81 @@ export default function Login() {
       newErrors.email = 'Please enter a valid email address';
     }
 
-    if (!password.trim()) {
-      newErrors.password = 'Password is required';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleLogin = async () => {
+  const handleResetPassword = async () => {
     if (!validateForm()) return;
 
     setIsLoading(true);
-    const result = await login(email.toLowerCase().trim(), password);
-    setIsLoading(false);
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.PASSWORD_RESET, {
+        email: email.toLowerCase().trim(),
+      });
 
-    if (result.success) {
-      router.replace('/(protected)');
-    } else {
-      Alert.alert('Login Failed', result.error || 'An error occurred');
+      const data = response.data;
+
+      if (data.success) {
+        setIsSuccess(true);
+      } else {
+        Alert.alert('Reset Failed', data.error?.message || 'Failed to send reset email');
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('Password reset failed');
+      }
+      Alert.alert('Reset Failed', apiHelpers.getErrorMessage(error as any));
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  const handleBackToLogin = () => {
+    router.replace('/(auth)/login');
+  };
+
+  if (isSuccess) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={createTypographyStyle(theme, 'h1')}>Check Your Email</Text>
+          </View>
+
+          <View style={styles.successContainer}>
+            <Text style={styles.successText}>
+              Password reset instructions have been sent to your email address.
+            </Text>
+            <Text style={styles.instructionText}>
+              Please check your inbox and follow the instructions in the email to reset your password.
+              Don't forget to check your spam folder if you don't see it.
+            </Text>
+
+            <TouchableOpacity
+              style={createButtonStyle(theme, 'primary', 'md')}
+              onPress={handleBackToLogin}
+            >
+              <Text style={createButtonTextStyle(theme, 'primary', 'md')}>
+                Back to Login
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={createTypographyStyle(theme, 'body')}>Didn't receive an email? </Text>
+            <TouchableOpacity onPress={() => {
+              setIsSuccess(false);
+              setEmail('');
+            }}>
+              <Text style={createTypographyStyle(theme, 'link')}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -107,8 +179,8 @@ export default function Login() {
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={createTypographyStyle(theme, 'h1')}>Welcome Back</Text>
-            <Text style={createTypographyStyle(theme, 'body')}>Sign in to access historical sites</Text>
+            <Text style={createTypographyStyle(theme, 'h1')}>Reset Password</Text>
+            <Text style={createTypographyStyle(theme, 'body')}>Enter your email to receive reset instructions</Text>
           </View>
 
           <View style={styles.form}>
@@ -147,69 +219,25 @@ export default function Login() {
               )}
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={createInputLabelStyle(theme, !!errors.password, isLoading)}>Password</Text>
-              <TextInput
-                style={[
-                  createInputStyle(
-                    theme,
-                    'default',
-                    'md',
-                    !!errors.password,
-                    focusedField === 'password',
-                    isLoading
-                  ) as any,
-                  createInputTextStyle(theme, 'md', isLoading)
-                ]}
-                placeholder="Enter your password"
-                placeholderTextColor={getPlaceholderColor(theme)}
-                value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  if (errors.password) {
-                    setErrors(prev => ({ ...prev, password: undefined }));
-                  }
-                }}
-                onFocus={() => setFocusedField('password')}
-                onBlur={() => setFocusedField(null)}
-                secureTextEntry
-                autoComplete="password"
-                editable={!isLoading}
-              />
-              {errors.password && (
-                <Text style={createInputErrorStyle(theme)}>{errors.password}</Text>
-              )}
-            </View>
-
-            <View style={{ alignItems: 'flex-end', marginBottom: theme.spacing.md }}>
-              <TouchableOpacity onPress={() => {
-                router.push('/(auth)/reset-password');
-              }}>
-                <Text style={createTypographyStyle(theme, 'link')}>Forgot Password?</Text>
-              </TouchableOpacity>
-            </View>
-
             <TouchableOpacity
               style={createButtonStyle(theme, 'primary', 'md', isLoading)}
-              onPress={handleLogin}
+              onPress={handleResetPassword}
               disabled={isLoading}
             >
               {isLoading ? (
                 <ActivityIndicator color={theme.colors.textInverse} />
               ) : (
                 <Text style={createButtonTextStyle(theme, 'primary', 'md', isLoading)}>
-                  Sign In
+                  Send Reset Instructions
                 </Text>
               )}
             </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
-            <Text style={createTypographyStyle(theme, 'body')}>Don&apos;t have an account? </Text>
-            <TouchableOpacity onPress={() => {
-              router.push('/(auth)/register');
-            }}>
-              <Text style={createTypographyStyle(theme, 'link')}>Sign Up</Text>
+            <Text style={createTypographyStyle(theme, 'body')}>Remember your password? </Text>
+            <TouchableOpacity onPress={handleBackToLogin}>
+              <Text style={createTypographyStyle(theme, 'link')}>Sign In</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -217,4 +245,3 @@ export default function Login() {
     </SafeAreaView>
   );
 }
-

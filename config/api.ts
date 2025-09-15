@@ -10,6 +10,7 @@ export const API_ENDPOINTS = {
     REFRESH: '/auth/token/refresh/',
     VERIFY: '/auth/token/verify/',
     LOGOUT: '/auth/logout/',
+    PASSWORD_RESET: '/auth/password-reset/',
   },
   USERS: {
     ME: '/users/me/',
