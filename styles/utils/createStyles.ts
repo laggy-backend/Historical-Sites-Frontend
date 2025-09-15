@@ -17,13 +17,13 @@ export const createStyles = <T extends NamedStyles<T>>(
   styleFactory: (theme: Theme) => T
 ) => {
   let cachedTheme: Theme | null = null;
-  let cachedStyles: StyleSheet.NamedStyles<T> | null = null;
+  let cachedStyles: T | null = null;
 
-  return (theme: Theme): StyleSheet.NamedStyles<T> => {
+  return (theme: Theme): T => {
     // Cache optimization: only recreate styles if theme changed
     if (cachedTheme !== theme || !cachedStyles) {
       cachedTheme = theme;
-      cachedStyles = StyleSheet.create(styleFactory(theme));
+      cachedStyles = StyleSheet.create(styleFactory(theme)) as T;
     }
     return cachedStyles;
   };

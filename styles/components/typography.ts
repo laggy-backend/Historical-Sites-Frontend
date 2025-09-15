@@ -20,7 +20,7 @@ export const createTypographyStyle = (
       fontSize: theme.fontSize.xxl,
       fontWeight: theme.fontWeight.bold,
       color: theme.colors.textPrimary,
-      lineHeight: theme.lineHeight.tight,
+      lineHeight: theme.lineHeight.loose,
     },
     h2: {
       fontSize: theme.fontSize.xl,

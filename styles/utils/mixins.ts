@@ -139,11 +139,11 @@ export const createTypography = (
   theme: Theme,
   size: keyof Theme['fontSize'] = 'md',
   weight: keyof Theme['fontWeight'] = 'normal',
-  color: keyof Theme['colors'] = 'textPrimary'
+  color: string = theme.colors.textPrimary
 ): TextStyle => ({
   fontSize: theme.fontSize[size],
   fontWeight: theme.fontWeight[weight],
-  color: theme.colors[color],
+  color: color,
 });
 
 /**

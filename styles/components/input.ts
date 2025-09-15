@@ -127,7 +127,7 @@ export const createInputLabelStyle = (
   hasError: boolean = false,
   disabled: boolean = false
 ): TextStyle => {
-  let color = theme.colors.textSecondary;
+  let color: string = theme.colors.textSecondary;
 
   if (hasError) {
     color = theme.colors.error;

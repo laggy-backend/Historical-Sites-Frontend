@@ -109,7 +109,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     }
   };
 
-  const currentTheme = themeMode === 'dark' ? darkTheme : lightTheme;
+  const currentTheme: Theme = themeMode === 'dark' ? darkTheme : lightTheme;
 
   const contextValue: ThemeContextType = {
     theme: currentTheme,
