@@ -172,8 +172,14 @@ export default function Login() {
                 }}
                 onFocus={() => setFocusedField('password')}
                 onBlur={() => setFocusedField(null)}
-                secureTextEntry
+                secureTextEntry={true}
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
                 autoComplete="password"
+                textContentType="password"
+                keyboardType="default"
+                importantForAutofill="no"
                 editable={!isLoading}
               />
               {errors.password && (

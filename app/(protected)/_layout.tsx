@@ -2,9 +2,15 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { useTheme } from '../../styles';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../contexts/AuthContext';
+import { canCreateContent } from '../../utils/permissions';
 
 export default function ProtectedLayout() {
   const { theme } = useTheme();
+  const { user } = useAuth();
+
+  // Check if user can create content
+  const userCanCreateContent = canCreateContent(user?.role);
 
   return (
     <Tabs
@@ -14,9 +20,9 @@ export default function ProtectedLayout() {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 80,
+          paddingBottom: 12,
+          paddingTop: 12,
+          height: 88,
         },
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textSecondary,
@@ -29,15 +35,6 @@ export default function ProtectedLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
         options={{
           title: 'Explore',
           tabBarIcon: ({ color, size }) => (
@@ -52,6 +49,7 @@ export default function ProtectedLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="add-circle" size={size} color={color} />
           ),
+          href: userCanCreateContent ? '/upload' : null,
         }}
       />
       <Tabs.Screen

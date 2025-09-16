@@ -2,6 +2,8 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { ReferenceDataProvider } from '../contexts/ReferenceDataContext';
+import { SearchProvider } from '../contexts/SearchContext';
 import { ThemeProvider } from '../styles';
 
 function LoadingScreen() {
@@ -47,7 +49,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <RootLayoutNav />
+        <ReferenceDataProvider>
+          <SearchProvider>
+            <RootLayoutNav />
+          </SearchProvider>
+        </ReferenceDataProvider>
       </AuthProvider>
     </ThemeProvider>
   );

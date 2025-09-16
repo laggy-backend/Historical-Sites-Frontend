@@ -198,8 +198,14 @@ export default function Register() {
                 }}
                 onFocus={() => setFocusedField('password')}
                 onBlur={() => setFocusedField(null)}
-                secureTextEntry
+                secureTextEntry={true}
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
                 autoComplete="new-password"
+                textContentType="newPassword"
+                keyboardType="default"
+                importantForAutofill="no"
                 editable={!isLoading}
               />
               {errors.password && (
@@ -232,8 +238,14 @@ export default function Register() {
                 }}
                 onFocus={() => setFocusedField('confirmPassword')}
                 onBlur={() => setFocusedField(null)}
-                secureTextEntry
+                secureTextEntry={true}
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
                 autoComplete="new-password"
+                textContentType="newPassword"
+                keyboardType="default"
+                importantForAutofill="no"
                 editable={!isLoading}
               />
               {errors.confirmPassword && (

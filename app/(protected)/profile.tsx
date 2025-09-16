@@ -1,12 +1,14 @@
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { ActivityIndicator, Alert, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_ENDPOINTS } from '../../config';
 import apiClient, { apiHelpers } from '../../services/api';
 import { logger } from '../../utils/logger';
+import { AxiosError } from 'axios';
 import {
   createButtonStyle,
   createButtonTextStyle,
@@ -29,7 +31,11 @@ export default function Profile() {
   const { theme, themeMode, isSystemTheme, toggleTheme, setSystemTheme } = useTheme();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  // REMOVED: refreshing state - not needed without pull-to-refresh
+  const [cooldownActive, setCooldownActive] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [connectionError, setConnectionError] = useState(false);
+  const requestInProgressRef = useRef(false);
 
   const styles = createStyles((theme) => ({
     container: {
@@ -162,38 +168,141 @@ export default function Profile() {
       color: theme.colors.textTertiary,
       marginTop: theme.spacing.xs,
     },
+    cooldownContainer: {
+      backgroundColor: theme.colors.warning,
+      borderRadius: theme.borderRadius.md,
+      padding: theme.spacing.md,
+      marginBottom: theme.spacing.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.warningBorder || theme.colors.warning,
+    },
+    cooldownText: {
+      ...createTypographyStyle(theme, 'bodySmall'),
+      color: theme.colors.textInverse,
+      textAlign: 'center',
+      fontWeight: theme.fontWeight.semibold,
+    },
+    refreshButtonDisabled: {
+      ...rowCenter,
+      justifyContent: 'center',
+      backgroundColor: theme.colors.backgroundTertiary,
+      borderRadius: theme.borderRadius.md,
+      padding: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      gap: theme.spacing.sm,
+      opacity: 0.6,
+    },
+    refreshButtonTextDisabled: {
+      ...createTypographyStyle(theme, 'body'),
+      color: theme.colors.textSecondary,
+      fontWeight: theme.fontWeight.medium,
+    },
+    connectionErrorContainer: {
+      backgroundColor: '#FEF3E2', // Light orange background
+      borderRadius: theme.borderRadius.md,
+      padding: theme.spacing.md,
+      marginBottom: theme.spacing.lg,
+      borderWidth: 1,
+      borderColor: '#F59E0B', // Orange border
+      ...rowCenter,
+      gap: theme.spacing.sm,
+    },
+    connectionErrorText: {
+      ...createTypographyStyle(theme, 'bodySmall'),
+      color: '#92400E', // Dark orange text
+      flex: 1,
+    },
   }))(theme);
 
-  useEffect(() => {
-    if (user) {
-      setProfile(user);
-      fetchUserProfile();
+  const fetchUserProfile = useCallback(async (isManualRefresh = false) => {
+    // Prevent multiple concurrent requests
+    if (requestInProgressRef.current) {
+      return;
     }
-  }, [user]);
-
-  const fetchUserProfile = async () => {
-    if (isLoading) return;
 
     try {
+      requestInProgressRef.current = true;
       setIsLoading(true);
       const response = await apiClient.get(API_ENDPOINTS.USERS.ME);
       const userData = response.data;
 
       if (userData.success) {
         setProfile(userData.data);
+        setConnectionError(false); // Clear connection error on success
+      }
+
+      // Start cooldown after successful manual refresh
+      if (isManualRefresh) {
+        setCooldownActive(true);
+        setCooldownSeconds(30);
       }
     } catch (error) {
-      logger.warn('api', 'Failed to fetch user profile', { error: (error as Error).message });
-      Alert.alert('Error', 'Failed to refresh profile data');
+      const axiosError = error as AxiosError;
+      const errorMessage = apiHelpers.getUserFriendlyMessage(axiosError);
+
+      logger.warn('api', 'Failed to fetch user profile', {
+        error: axiosError.message,
+        isNetworkError: apiHelpers.isNetworkError(axiosError)
+      });
+
+      // Set connection error state for UI feedback
+      const isNetworkError = apiHelpers.isNetworkError(axiosError);
+      setConnectionError(isNetworkError);
+
+      // Only show alert for manual refreshes or non-network errors
+      // For network errors on auto-refresh, silently handle them
+      const shouldShowAlert = isManualRefresh || !isNetworkError;
+
+      if (shouldShowAlert) {
+        Alert.alert(
+          isNetworkError ? 'Connection Error' : 'Error',
+          errorMessage
+        );
+      }
     } finally {
       setIsLoading(false);
+      requestInProgressRef.current = false;
     }
-  };
+  }, []); // Remove isLoading dependency to break the loop
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchUserProfile();
-    setRefreshing(false);
+  // SIMPLE APPROACH: Only load profile once when user changes
+  useEffect(() => {
+    if (user) {
+      setProfile(user); // Use cached user data immediately
+      // NO automatic API call here - users can manually refresh if they want fresh data
+    }
+  }, [user]); // Only depend on user changes
+
+  // REMOVED: Auto-refresh on focus - this was causing the infinite loop
+  // Users can manually refresh if they need updated data
+
+  // Cooldown timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (cooldownActive && cooldownSeconds > 0) {
+      interval = setInterval(() => {
+        setCooldownSeconds((prev) => {
+          if (prev <= 1) {
+            setCooldownActive(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [cooldownActive, cooldownSeconds]);
+
+  // REMOVED: onRefresh handler - no longer using pull-to-refresh to avoid loops
+
+  const handleManualRefresh = async () => {
+    if (cooldownActive || isLoading || requestInProgressRef.current) return;
+    await fetchUserProfile(true);
   };
 
   const handleLogout = async () => {
@@ -250,14 +359,6 @@ export default function Profile() {
       <ScrollView
         style={styles.scrollContainer}
         contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.colors.primary}
-            colors={[theme.colors.primary]}
-          />
-        }
       >
         <View style={styles.header}>
           <View style={styles.avatarContainer}>
@@ -267,6 +368,23 @@ export default function Profile() {
           </View>
           <Text style={styles.titleText}>Profile</Text>
         </View>
+
+        {cooldownActive && (
+          <View style={styles.cooldownContainer}>
+            <Text style={styles.cooldownText}>
+              Please wait {cooldownSeconds} seconds before refreshing again
+            </Text>
+          </View>
+        )}
+
+        {connectionError && (
+          <View style={styles.connectionErrorContainer}>
+            <Ionicons name="warning" size={20} color="#F59E0B" />
+            <Text style={styles.connectionErrorText}>
+              Unable to connect to server. Profile data may not be up to date.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.userInfoCard}>
           <View style={styles.infoRow}>
@@ -335,17 +453,26 @@ export default function Profile() {
 
         <View style={styles.actionsContainer}>
           <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={fetchUserProfile}
-            disabled={isLoading}
+            style={cooldownActive || isLoading ? styles.refreshButtonDisabled : styles.refreshButton}
+            onPress={handleManualRefresh}
+            disabled={isLoading || cooldownActive}
           >
             {isLoading ? (
               <ActivityIndicator size="small" color={theme.colors.primary} />
             ) : (
-              <Ionicons name="refresh" size={20} color={theme.colors.primary} />
+              <Ionicons
+                name="refresh"
+                size={20}
+                color={cooldownActive ? theme.colors.textSecondary : theme.colors.primary}
+              />
             )}
-            <Text style={styles.refreshButtonText}>
-              {isLoading ? 'Refreshing...' : 'Refresh Profile'}
+            <Text style={cooldownActive ? styles.refreshButtonTextDisabled : styles.refreshButtonText}>
+              {isLoading
+                ? 'Refreshing...'
+                : cooldownActive
+                ? `Wait ${cooldownSeconds}s`
+                : 'Refresh Profile Data'
+              }
             </Text>
           </TouchableOpacity>
 

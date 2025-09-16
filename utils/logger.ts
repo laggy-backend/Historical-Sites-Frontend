@@ -4,7 +4,7 @@
  */
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-export type LogContext = 'auth' | 'api' | 'theme' | 'navigation' | 'general';
+export type LogContext = 'auth' | 'api' | 'theme' | 'navigation' | 'general' | 'search' | 'filterMapping';
 
 interface LogEntry {
   level: LogLevel;

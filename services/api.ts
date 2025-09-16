@@ -202,9 +202,27 @@ export const apiHelpers = {
    * Check if error is a network connectivity issue
    */
   isNetworkError: (error: AxiosError | ApiError): boolean => {
-    if ('code' in error && error.code === 'NETWORK_ERROR') return true;
-    if (error.message?.includes('Network Error')) return true;
-    if (error.message?.includes('timeout')) return true;
+    // Check axios error codes for network issues
+    if ('code' in error) {
+      const networkCodes = ['NETWORK_ERROR', 'ENOTFOUND', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'];
+      if (networkCodes.includes(error.code as string)) return true;
+    }
+
+    // Check error messages for network issues
+    if (error.message) {
+      const networkMessages = [
+        'Network Error',
+        'timeout',
+        'connect ECONNREFUSED',
+        'getaddrinfo ENOTFOUND',
+        'socket hang up'
+      ];
+      if (networkMessages.some(msg => error.message!.includes(msg))) return true;
+    }
+
+    // Check if it's a timeout from axios
+    if (error.message?.includes('timeout of')) return true;
+
     return false;
   },
 
@@ -235,14 +253,22 @@ export const apiHelpers = {
 
     // Map technical errors to user-friendly messages
     const errorMappings: Record<string, string> = {
-      'Network Error': 'Please check your internet connection and try again.',
-      'timeout': 'The request took too long. Please try again.',
+      'Network Error': 'Unable to connect to server. Please check your internet connection.',
+      'timeout': 'Connection timed out. Please try again.',
+      'connect ECONNREFUSED': 'Server is unavailable. Please try again later.',
+      'getaddrinfo ENOTFOUND': 'Unable to reach server. Please check your internet connection.',
+      'socket hang up': 'Connection was interrupted. Please try again.',
       'Request failed with status code 500': 'Server error. Please try again later.',
       'Request failed with status code 503': 'Service temporarily unavailable. Please try again later.',
       'VALIDATION_ERROR': 'Please check your input and try again.',
       'UNAUTHORIZED': 'Please log in again to continue.',
       'INSUFFICIENT_PERMISSIONS': 'You don\'t have permission to perform this action.',
       'RATE_LIMITED': 'Too many requests. Please wait a moment and try again.',
+      'NETWORK_ERROR': 'No internet connection. Please check your network settings.',
+      'ENOTFOUND': 'Unable to reach server. Please check your internet connection.',
+      'ECONNREFUSED': 'Server is currently unavailable. Please try again later.',
+      'ECONNRESET': 'Connection was reset. Please try again.',
+      'ETIMEDOUT': 'Connection timed out. Please try again.',
     };
 
     // Check for exact matches first
