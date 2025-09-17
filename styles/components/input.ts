@@ -8,7 +8,7 @@ import { Theme } from '../theme/variants';
 import { createInputBase, createTypography } from '../utils/mixins';
 import { InputStyleType } from '../../types/api';
 
-export type InputVariant = 'default' | 'filled' | 'outline';
+export type InputVariant = 'default' | 'filled';
 export type InputSize = 'sm' | 'md' | 'lg';
 
 /**
@@ -53,10 +53,6 @@ export const createInputStyle = (
     filled: {
       backgroundColor: theme.colors.backgroundTertiary,
       borderColor: 'transparent',
-    },
-    outline: {
-      backgroundColor: 'transparent',
-      borderColor: theme.colors.border,
     },
   };
 

@@ -1,0 +1,847 @@
+/**
+ * Edit Historical Site Form
+ * Multi-step form for editing existing historical sites
+ * Based on upload form but pre-populated with existing data
+ */
+
+import { StatusBar } from 'expo-status-bar';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Text,
+  View,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  createButtonStyle,
+  createButtonTextStyle,
+  createInputErrorStyle,
+  createInputLabelStyle,
+  createInputStyle,
+  createInputTextStyle,
+  createStyles,
+  createTypographyStyle,
+  flexFull,
+  getPlaceholderColor,
+  rowCenter,
+  useTheme
+} from '../../../styles';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useReferenceData } from '../../../contexts/ReferenceDataContext';
+import { historicalSitesApi } from '../../../services/historicalSites';
+import { LocationPicker } from '../../../components/maps/LocationPicker';
+import { CityFilter } from '../../../components/filters/CityFilter';
+import { CategoryFilter } from '../../../components/filters/CategoryFilter';
+import { TagFilter } from '../../../components/filters/TagFilter';
+import { MediaPicker, MediaItem } from '../../../components/media/MediaPicker';
+import { UpdateSiteData, Coordinate, SiteFormErrors, HistoricalSite } from '../../../types/historicalSites';
+import {
+  validateEnglishName,
+  validateArabicName,
+  validateEnglishDescription,
+  validateArabicDescription,
+  validateSiteCreationForm
+} from '../../../utils/validation';
+import { parseApiError, mapApiFieldToFormField } from '../../../utils/errorParser';
+import { canEditSite } from '../../../utils/permissions';
+
+type FormStep = 'basic' | 'location' | 'metadata' | 'media' | 'review';
+
+interface FormData {
+  name_en: string;
+  name_ar: string;
+  description_en: string;
+  description_ar: string;
+  coordinate?: Coordinate;
+  selectedCity?: string;
+  selectedCategories: string[];
+  selectedTags: string[];
+  mediaItems: MediaItem[];
+}
+
+export default function EditSite() {
+  const { theme } = useTheme();
+  const { user } = useAuth();
+  const { id } = useLocalSearchParams();
+  const { findCityByName, findCategoryBySlug, findTagBySlug, getCityName } = useReferenceData();
+
+  const siteId = parseInt(id as string, 10);
+
+  // Check if user can edit this site
+  const [site, setSite] = useState<HistoricalSite | null>(null);
+  const [isLoadingSite, setIsLoadingSite] = useState(true);
+  const userCanEdit = site && user ? canEditSite(site.user, user.id, user.role) : false;
+
+  const [currentStep, setCurrentStep] = useState<FormStep>('basic');
+  const [formData, setFormData] = useState<FormData>({
+    name_en: '',
+    name_ar: '',
+    description_en: '',
+    description_ar: '',
+    coordinate: undefined,
+    selectedCity: undefined,
+    selectedCategories: [],
+    selectedTags: [],
+    mediaItems: []
+  });
+  const [errors, setErrors] = useState<SiteFormErrors>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  const styles = createStyles((theme) => ({
+    container: {
+      ...flexFull,
+      backgroundColor: theme.colors.background,
+    },
+    header: {
+      ...rowCenter,
+      justifyContent: 'space-between',
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    headerTitle: {
+      ...createTypographyStyle(theme, 'h3'),
+      fontWeight: theme.fontWeight.semibold,
+    },
+    backButton: {
+      ...rowCenter,
+      gap: theme.spacing.sm,
+    },
+    backButtonText: {
+      ...createTypographyStyle(theme, 'body'),
+      color: theme.colors.textSecondary,
+    },
+    scrollContainer: {
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.xxl,
+    },
+    formSection: {
+      paddingVertical: theme.spacing.lg,
+      gap: theme.spacing.lg,
+    },
+    stepTitle: {
+      ...createTypographyStyle(theme, 'h2'),
+      marginBottom: theme.spacing.sm,
+    },
+    stepDescription: {
+      ...createTypographyStyle(theme, 'body'),
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.lg,
+    },
+    inputContainer: {
+      gap: theme.spacing.sm,
+    },
+    navigationBar: {
+      ...rowCenter,
+      justifyContent: 'space-between',
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.lg,
+      backgroundColor: theme.colors.background,
+    },
+    navButton: {
+      ...createButtonStyle(theme, 'secondary', 'md'),
+      minWidth: 100,
+    },
+    navButtonDisabled: {
+      ...createButtonStyle(theme, 'secondary', 'md'),
+      minWidth: 100,
+      opacity: 0.5,
+    },
+    navButtonPrimary: {
+      ...createButtonStyle(theme, 'primary', 'md'),
+      minWidth: 100,
+    },
+    navButtonText: {
+      ...createButtonTextStyle(theme, 'secondary', 'md'),
+    },
+    navButtonTextDisabled: {
+      ...createButtonTextStyle(theme, 'secondary', 'md'),
+      opacity: 0.7,
+    },
+    navButtonTextPrimary: {
+      ...createButtonTextStyle(theme, 'primary', 'md'),
+    },
+    arrowButton: {
+      padding: theme.spacing.sm,
+      justifyContent: 'center',
+      alignItems: 'center',
+      minWidth: 40,
+      minHeight: 40,
+    },
+    loadingContainer: {
+      ...flexFull,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: theme.spacing.lg,
+    },
+    existingMediaInfo: {
+      backgroundColor: theme.colors.primaryLight,
+      borderRadius: theme.borderRadius.md,
+      padding: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+    },
+    existingMediaText: {
+      ...createTypographyStyle(theme, 'caption'),
+      color: theme.colors.primary,
+      textAlign: 'center',
+    },
+  }))(theme);
+
+  const loadSiteData = useCallback(async () => {
+    try {
+      setIsLoadingSite(true);
+      const response = await historicalSitesApi.getSite(siteId);
+
+      if (response.success) {
+        const siteData = response.data;
+        setSite(siteData);
+
+        // Pre-populate form with existing data
+        setFormData({
+          name_en: siteData.name_en,
+          name_ar: siteData.name_ar,
+          description_en: siteData.description_en,
+          description_ar: siteData.description_ar,
+          coordinate: {
+            latitude: siteData.latitude,
+            longitude: siteData.longitude
+          },
+          selectedCity: getCityName(siteData.city),
+          selectedCategories: siteData.categories_detail?.map(cat => cat.slug_en) || [],
+          selectedTags: siteData.tags_detail?.map(tag => tag.slug_en) || [],
+          mediaItems: [] // New media items to be added (existing media is managed separately)
+        });
+      } else {
+        Alert.alert('Error', 'Site not found');
+        router.back();
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to load site data');
+      router.back();
+    } finally {
+      setIsLoadingSite(false);
+    }
+  }, [siteId, getCityName]);
+
+  useEffect(() => {
+    if (siteId && !isNaN(siteId)) {
+      loadSiteData();
+    }
+  }, [siteId, loadSiteData]);
+
+  const updateFormData = (updates: Partial<FormData>) => {
+    setFormData(prev => ({ ...prev, ...updates }));
+
+    // Clear related errors when user starts typing
+    const updatedFields = Object.keys(updates);
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      updatedFields.forEach(field => {
+        delete newErrors[field as keyof SiteFormErrors];
+      });
+      return newErrors;
+    });
+  };
+
+  const validateCurrentStep = (): boolean => {
+    const newErrors: SiteFormErrors = {};
+
+    switch (currentStep) {
+      case 'basic':
+        const nameEnError = validateEnglishName(formData.name_en);
+        if (nameEnError) newErrors.name_en = nameEnError;
+
+        const nameArError = validateArabicName(formData.name_ar);
+        if (nameArError) newErrors.name_ar = nameArError;
+
+        const descEnError = validateEnglishDescription(formData.description_en);
+        if (descEnError) newErrors.description_en = descEnError;
+
+        const descArError = validateArabicDescription(formData.description_ar);
+        if (descArError) newErrors.description_ar = descArError;
+        break;
+
+      case 'location':
+        if (!formData.coordinate) {
+          newErrors.coordinate = 'Location is required';
+        }
+        break;
+
+      case 'metadata':
+        if (!formData.selectedCity) {
+          newErrors.city = 'City selection is required';
+        }
+        break;
+
+      case 'media':
+        // Media is optional for editing, no validation needed
+        break;
+
+      case 'review':
+        const finalErrors = validateSiteCreationForm({
+          name_en: formData.name_en,
+          name_ar: formData.name_ar,
+          description_en: formData.description_en,
+          description_ar: formData.description_ar,
+          coordinate: formData.coordinate,
+          selectedCity: formData.selectedCity
+        });
+        Object.assign(newErrors, finalErrors);
+        break;
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleNext = () => {
+    if (!validateCurrentStep()) return;
+
+    const steps: FormStep[] = ['basic', 'location', 'metadata', 'media', 'review'];
+    const currentIndex = steps.indexOf(currentStep);
+    if (currentIndex < steps.length - 1) {
+      setCurrentStep(steps[currentIndex + 1]);
+    }
+  };
+
+  const handlePrevious = () => {
+    const steps: FormStep[] = ['basic', 'location', 'metadata', 'media', 'review'];
+    const currentIndex = steps.indexOf(currentStep);
+    if (currentIndex > 0) {
+      setCurrentStep(steps[currentIndex - 1]);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!validateCurrentStep() || !user || !site) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      // Convert user-friendly names to IDs
+      const city = findCityByName(formData.selectedCity!);
+      if (!city) {
+        Alert.alert('Error', 'Selected city not found');
+        return;
+      }
+
+      const categoryIds = formData.selectedCategories
+        .map(slug => findCategoryBySlug(slug)?.id)
+        .filter(id => id !== undefined) as number[];
+
+      const tagIds = formData.selectedTags
+        .map(slug => findTagBySlug(slug)?.id)
+        .filter(id => id !== undefined) as number[];
+
+      const updateData: UpdateSiteData = {
+        name_en: formData.name_en.trim(),
+        name_ar: formData.name_ar.trim(),
+        description_en: formData.description_en.trim(),
+        description_ar: formData.description_ar.trim(),
+        latitude: formData.coordinate!.latitude,
+        longitude: formData.coordinate!.longitude,
+        city: city.id,
+        categories: categoryIds.length > 0 ? categoryIds : undefined,
+        tags: tagIds.length > 0 ? tagIds : undefined
+      };
+
+      const response = await historicalSitesApi.updateSite(siteId, updateData);
+
+      if (response.success) {
+        // Upload new media files if any
+        if (formData.mediaItems.length > 0) {
+          try {
+            await historicalSitesApi.bulkMediaUpload(
+              siteId,
+              formData.mediaItems.map(item => item.file),
+              formData.mediaItems.map(item => item.title || ''),
+              formData.mediaItems.map(item => item.caption || ''),
+              formData.mediaItems.map(item => item.is_thumbnail || false)
+            );
+
+            Alert.alert('Success', 'Site and media updated successfully', [
+              {
+                text: 'OK',
+                onPress: () => router.replace(`/sites/${siteId}`)
+              }
+            ]);
+          } catch (mediaError) {
+            console.error('Media upload error:', mediaError);
+            const parsedMediaError = parseApiError(mediaError);
+
+            Alert.alert(
+              'Partial Success',
+              `Site updated successfully, but media upload failed: ${parsedMediaError.generalMessage}. You can add media later.`,
+              [
+                {
+                  text: 'OK',
+                  onPress: () => router.replace(`/sites/${siteId}`)
+                }
+              ]
+            );
+          }
+        } else {
+          Alert.alert('Success', 'Site updated successfully', [
+            {
+              text: 'OK',
+              onPress: () => router.replace(`/sites/${siteId}`)
+            }
+          ]);
+        }
+      } else {
+        Alert.alert('Error', 'Failed to update site');
+      }
+    } catch (error) {
+      console.error('Site update error:', error);
+
+      const parsedError = parseApiError(error);
+
+      if (parsedError.hasFieldErrors) {
+        const newErrors: SiteFormErrors = {};
+
+        for (const [apiField, fieldErrors] of Object.entries(parsedError.fieldErrors)) {
+          const formField = mapApiFieldToFormField(apiField);
+          if (fieldErrors.length > 0) {
+            switch (formField) {
+              case 'name_en':
+                newErrors.name_en = fieldErrors[0];
+                break;
+              case 'name_ar':
+                newErrors.name_ar = fieldErrors[0];
+                break;
+              case 'description_en':
+                newErrors.description_en = fieldErrors[0];
+                break;
+              case 'description_ar':
+                newErrors.description_ar = fieldErrors[0];
+                break;
+              case 'coordinate':
+                newErrors.coordinate = fieldErrors[0];
+                break;
+              case 'city':
+                newErrors.city = fieldErrors[0];
+                break;
+              case 'selectedCategories':
+                newErrors.selectedCategories = fieldErrors[0];
+                break;
+              case 'selectedTags':
+                newErrors.selectedTags = fieldErrors[0];
+                break;
+            }
+          }
+        }
+
+        setErrors(newErrors);
+
+        const stepHasError = (step: FormStep): boolean => {
+          switch (step) {
+            case 'basic':
+              return !!(newErrors.name_en || newErrors.name_ar || newErrors.description_en || newErrors.description_ar);
+            case 'location':
+              return !!newErrors.coordinate;
+            case 'metadata':
+              return !!(newErrors.city || newErrors.selectedCategories || newErrors.selectedTags);
+            default:
+              return false;
+          }
+        };
+
+        const steps: FormStep[] = ['basic', 'location', 'metadata', 'media', 'review'];
+        const errorStep = steps.find(stepHasError);
+        if (errorStep) {
+          setCurrentStep(errorStep);
+        }
+
+        Alert.alert(
+          'Validation Errors',
+          'Please fix the highlighted errors and try again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', parsedError.generalMessage);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 'basic':
+        return (
+          <View style={styles.formSection}>
+            <Text style={styles.stepTitle}>Basic Information</Text>
+            <Text style={styles.stepDescription}>
+              Update the site&apos;s name and description in both English and Arabic.
+            </Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.name_en, isLoading)}>
+                English Name *
+              </Text>
+              <TextInput
+                style={[
+                  createInputStyle(theme, 'default', 'md', !!errors.name_en, focusedField === 'name_en', isLoading),
+                  createInputTextStyle(theme, 'md', isLoading)
+                ]}
+                placeholder="Enter site name in English"
+                placeholderTextColor={getPlaceholderColor(theme)}
+                value={formData.name_en}
+                onChangeText={(text) => updateFormData({ name_en: text })}
+                onFocus={() => setFocusedField('name_en')}
+                onBlur={() => setFocusedField(null)}
+                editable={!isLoading}
+              />
+              {errors.name_en && <Text style={createInputErrorStyle(theme)}>{errors.name_en}</Text>}
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.name_ar, isLoading)}>
+                Arabic Name *
+              </Text>
+              <TextInput
+                style={[
+                  createInputStyle(theme, 'default', 'md', !!errors.name_ar, focusedField === 'name_ar', isLoading),
+                  createInputTextStyle(theme, 'md', isLoading)
+                ]}
+                placeholder="أدخل اسم الموقع بالعربية"
+                placeholderTextColor={getPlaceholderColor(theme)}
+                value={formData.name_ar}
+                onChangeText={(text) => updateFormData({ name_ar: text })}
+                onFocus={() => setFocusedField('name_ar')}
+                onBlur={() => setFocusedField(null)}
+                editable={!isLoading}
+              />
+              {errors.name_ar && <Text style={createInputErrorStyle(theme)}>{errors.name_ar}</Text>}
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.description_en, isLoading)}>
+                English Description *
+              </Text>
+              <TextInput
+                style={[
+                  createInputStyle(theme, 'default', 'md', !!errors.description_en, focusedField === 'description_en', isLoading),
+                  createInputTextStyle(theme, 'md', isLoading),
+                  { height: 120, textAlignVertical: 'top' }
+                ]}
+                placeholder="Describe the historical significance and details of this site"
+                placeholderTextColor={getPlaceholderColor(theme)}
+                value={formData.description_en}
+                onChangeText={(text) => updateFormData({ description_en: text })}
+                onFocus={() => setFocusedField('description_en')}
+                onBlur={() => setFocusedField(null)}
+                editable={!isLoading}
+                multiline
+                numberOfLines={4}
+              />
+              {errors.description_en && <Text style={createInputErrorStyle(theme)}>{errors.description_en}</Text>}
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.description_ar, isLoading)}>
+                Arabic Description *
+              </Text>
+              <TextInput
+                style={[
+                  createInputStyle(theme, 'default', 'md', !!errors.description_ar, focusedField === 'description_ar', isLoading),
+                  createInputTextStyle(theme, 'md', isLoading),
+                  { height: 120, textAlignVertical: 'top' }
+                ]}
+                placeholder="اوصف الأهمية التاريخية وتفاصيل هذا الموقع"
+                placeholderTextColor={getPlaceholderColor(theme)}
+                value={formData.description_ar}
+                onChangeText={(text) => updateFormData({ description_ar: text })}
+                onFocus={() => setFocusedField('description_ar')}
+                onBlur={() => setFocusedField(null)}
+                editable={!isLoading}
+                multiline
+                numberOfLines={4}
+              />
+              {errors.description_ar && <Text style={createInputErrorStyle(theme)}>{errors.description_ar}</Text>}
+            </View>
+          </View>
+        );
+
+      case 'location':
+        return (
+          <View style={styles.formSection}>
+            <Text style={styles.stepTitle}>Location</Text>
+            <Text style={styles.stepDescription}>
+              Update the exact location of the historical site on the map.
+            </Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.coordinate, isLoading)}>
+                Site Location *
+              </Text>
+              <LocationPicker
+                initialCoordinate={formData.coordinate}
+                onLocationSelect={(coordinate) => updateFormData({ coordinate })}
+                error={errors.coordinate}
+              />
+              {errors.coordinate && <Text style={createInputErrorStyle(theme)}>{errors.coordinate}</Text>}
+            </View>
+          </View>
+        );
+
+      case 'metadata':
+        return (
+          <View style={styles.formSection}>
+            <Text style={styles.stepTitle}>Metadata</Text>
+            <Text style={styles.stepDescription}>
+              Update the site&apos;s city, categories, and tags.
+            </Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.city, isLoading)}>
+                City *
+              </Text>
+              <CityFilter
+                selectedCity={formData.selectedCity}
+                onCitySelect={(city) => updateFormData({ selectedCity: city })}
+                placeholder="Select the city"
+              />
+              {errors.city && <Text style={createInputErrorStyle(theme)}>{errors.city}</Text>}
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.selectedCategories, isLoading)}>
+                Categories
+              </Text>
+              <CategoryFilter
+                selectedCategories={formData.selectedCategories}
+                onCategoriesChange={(categories) => updateFormData({ selectedCategories: categories })}
+                placeholder="Select categories (optional)"
+              />
+              {errors.selectedCategories && <Text style={createInputErrorStyle(theme)}>{errors.selectedCategories}</Text>}
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={createInputLabelStyle(theme, !!errors.selectedTags, isLoading)}>
+                Tags
+              </Text>
+              <TagFilter
+                selectedTags={formData.selectedTags}
+                onTagsChange={(tags) => updateFormData({ selectedTags: tags })}
+                placeholder="Select tags (optional)"
+              />
+              {errors.selectedTags && <Text style={createInputErrorStyle(theme)}>{errors.selectedTags}</Text>}
+            </View>
+          </View>
+        );
+
+      case 'review':
+        return (
+          <View style={styles.formSection}>
+            <Text style={styles.stepTitle}>Review Changes</Text>
+            <Text style={styles.stepDescription}>
+              Please review your changes before saving.
+            </Text>
+
+            <View style={{ gap: theme.spacing.md }}>
+              <View>
+                <Text style={createInputLabelStyle(theme, false, false)}>English Name</Text>
+                <Text style={createTypographyStyle(theme, 'body')}>{formData.name_en}</Text>
+              </View>
+
+              <View>
+                <Text style={createInputLabelStyle(theme, false, false)}>Arabic Name</Text>
+                <Text style={createTypographyStyle(theme, 'body')}>{formData.name_ar}</Text>
+              </View>
+
+              <View>
+                <Text style={createInputLabelStyle(theme, false, false)}>City</Text>
+                <Text style={createTypographyStyle(theme, 'body')}>{formData.selectedCity}</Text>
+              </View>
+
+              {formData.selectedCategories.length > 0 && (
+                <View>
+                  <Text style={createInputLabelStyle(theme, false, false)}>Categories</Text>
+                  <Text style={createTypographyStyle(theme, 'body')}>
+                    {formData.selectedCategories.join(', ')}
+                  </Text>
+                </View>
+              )}
+
+              {formData.selectedTags.length > 0 && (
+                <View>
+                  <Text style={createInputLabelStyle(theme, false, false)}>Tags</Text>
+                  <Text style={createTypographyStyle(theme, 'body')}>
+                    {formData.selectedTags.join(', ')}
+                  </Text>
+                </View>
+              )}
+
+              {formData.mediaItems.length > 0 && (
+                <View>
+                  <Text style={createInputLabelStyle(theme, false, false)}>New Media Files</Text>
+                  <Text style={createTypographyStyle(theme, 'body')}>
+                    {formData.mediaItems.length} new file{formData.mediaItems.length !== 1 ? 's' : ''} will be added
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        );
+
+      case 'media':
+        return (
+          <View style={styles.formSection}>
+            <Text style={styles.stepTitle}>Media Files</Text>
+            <Text style={styles.stepDescription}>
+              Add new photos and videos to this site. Existing media files are preserved.
+            </Text>
+
+            {/* Show existing media count */}
+            {site && site.media_files.length > 0 && (
+              <View style={styles.existingMediaInfo}>
+                <Text style={styles.existingMediaText}>
+                  This site currently has {site.media_files.length} media file{site.media_files.length !== 1 ? 's' : ''}.
+                </Text>
+              </View>
+            )}
+
+            <MediaPicker
+              mediaItems={formData.mediaItems}
+              onMediaChange={(items) => updateFormData({ mediaItems: items })}
+              maxItems={10}
+              disabled={isLoading}
+            />
+          </View>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Show loading screen while loading site data
+  if (isLoadingSite) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={createTypographyStyle(theme, 'caption')}>
+            Loading site data...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show permission denied if user can't edit
+  if (!userCanEdit) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+        <View style={[flexFull, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: theme.spacing.lg }]}>
+          <Ionicons name="lock-closed-outline" size={64} color={theme.colors.textSecondary} />
+          <Text style={[createTypographyStyle(theme, 'h2'), { textAlign: 'center', marginVertical: theme.spacing.lg }]}>
+            Access Denied
+          </Text>
+          <Text style={[createTypographyStyle(theme, 'body'), { textAlign: 'center', color: theme.colors.textSecondary, marginBottom: theme.spacing.xl }]}>
+            You don&apos;t have permission to edit this site. Only the site owner or moderators can make changes.
+          </Text>
+          <TouchableOpacity
+            style={createButtonStyle(theme, 'primary', 'md')}
+            onPress={() => router.back()}
+          >
+            <Text style={createButtonTextStyle(theme, 'primary', 'md')}>
+              Go Back
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const isFirstStep = currentStep === 'basic';
+  const isLastStep = currentStep === 'review';
+  const canGoNext = () => validateCurrentStep();
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
+          <Text style={styles.backButtonText}>Cancel</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.headerTitle}>Edit Site</Text>
+
+        <View style={{ width: 80 }} />
+      </View>
+
+      <KeyboardAvoidingView
+        style={flexFull}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          style={flexFull}
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          {renderStepContent()}
+        </ScrollView>
+
+        {/* Navigation Bar */}
+        <View style={styles.navigationBar}>
+          <TouchableOpacity
+            style={styles.arrowButton}
+            onPress={handlePrevious}
+            disabled={isFirstStep || isLoading}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={24}
+              color={isFirstStep ? theme.colors.textSecondary : theme.colors.textPrimary}
+            />
+          </TouchableOpacity>
+
+          {isLastStep ? (
+            <TouchableOpacity
+              style={styles.navButtonPrimary}
+              onPress={handleSubmit}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color={theme.colors.textInverse} />
+              ) : (
+                <Text style={styles.navButtonTextPrimary}>Update Site</Text>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.arrowButton}
+              onPress={handleNext}
+              disabled={!canGoNext() || isLoading}
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={24}
+                color={canGoNext() ? theme.colors.primary : theme.colors.textSecondary}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}

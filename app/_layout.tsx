@@ -31,7 +31,7 @@ function RootLayoutNav() {
       // Redirect to protected area if authenticated and in auth group
       router.replace('/(protected)');
     }
-  }, [isAuthenticated, isLoading, segments, router]);
+  }, [isAuthenticated, isLoading, segments]);
 
   if (isLoading) {
     return <LoadingScreen />;

@@ -46,13 +46,49 @@ export const historicalSitesApi = {
   },
 
   /**
-   * Create a new historical site
+   * Create a new historical site (without media files)
    */
   createSite: async (siteData: CreateSiteData): Promise<ApiResponse<HistoricalSite>> => {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.HISTORICAL_SITES.CREATE, siteData);
+
+      // Prepare request data object
+      const requestData: any = {
+        name_en: siteData.name_en,
+        name_ar: siteData.name_ar,
+        description_en: siteData.description_en,
+        description_ar: siteData.description_ar,
+        latitude: siteData.latitude,
+        longitude: siteData.longitude,
+        city: siteData.city
+      };
+
+      // Add optional fields only if they exist
+      if (siteData.categories && siteData.categories.length > 0) {
+        requestData.categories = siteData.categories;
+      }
+
+      if (siteData.tags && siteData.tags.length > 0) {
+        requestData.tags = siteData.tags;
+      }
+
+
+      const response = await apiClient.post(API_ENDPOINTS.HISTORICAL_SITES.CREATE, requestData, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
       return response.data;
     } catch (error) {
+      console.error('Site creation API error:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+      }
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as any;
+        console.error('Response status:', axiosError.response?.status);
+        console.error('Response data:', axiosError.response?.data);
+        console.error('Response headers:', axiosError.response?.headers);
+      }
       throw error;
     }
   },
@@ -106,7 +142,7 @@ export const historicalSitesApi = {
   /**
    * Upload multiple media files to a historical site
    */
-  bulkMediaUpload: async (
+  uploadMediaFiles: async (
     siteId: number,
     files: any[],
     titles: string[] = [],
@@ -135,7 +171,7 @@ export const historicalSitesApi = {
       });
 
       const response = await apiClient.post(
-        API_ENDPOINTS.HISTORICAL_SITES.BULK_MEDIA(siteId),
+        API_ENDPOINTS.HISTORICAL_SITES.UPLOAD_MEDIA(siteId),
         formData,
         {
           headers: {
@@ -150,7 +186,7 @@ export const historicalSitesApi = {
   },
 
   /**
-   * Upload multiple media files to a historical site using bulk upload endpoint
+   * Upload multiple media files to a historical site using MediaItem objects
    */
   uploadSiteMedia: async (siteId: number, mediaItems: MediaItem[]): Promise<ApiResponse<{ media: MediaFile[] }>> => {
     try {
@@ -170,7 +206,7 @@ export const historicalSitesApi = {
       captions.forEach(caption => formData.append('captions', caption));
       thumbnails.forEach(thumbnail => formData.append('thumbnails', thumbnail.toString()));
 
-      const response = await apiClient.post(API_ENDPOINTS.SITES.BULK_MEDIA(siteId), formData, {
+      const response = await apiClient.post(API_ENDPOINTS.HISTORICAL_SITES.UPLOAD_MEDIA(siteId), formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         }
@@ -272,24 +308,6 @@ export const siteHelpers = {
     return params.toString();
   },
 
-  /**
-   * Check if user can edit a site based on ownership and role
-   */
-  canEditSite: (site: HistoricalSite, currentUserId: number, userRole: string): boolean => {
-    // Site owner can always edit
-    if (site.user === currentUserId) return true;
-
-    // Moderators and admins can edit any site
-    return ['moderator', 'admin'].includes(userRole);
-  },
-
-  /**
-   * Check if user can delete a site
-   */
-  canDeleteSite: (site: HistoricalSite, currentUserId: number, userRole: string): boolean => {
-    // Same permissions as editing for now
-    return siteHelpers.canEditSite(site, currentUserId, userRole);
-  },
 
   /**
    * Get thumbnail image from site's media files
@@ -308,32 +326,4 @@ export const siteHelpers = {
     return `${Math.abs(latitude).toFixed(4)}°${latDirection}, ${Math.abs(longitude).toFixed(4)}°${lonDirection}`;
   },
 
-  /**
-   * Validate site form data
-   */
-  validateSiteData: (data: CreateSiteData): { isValid: boolean; errors: Record<string, string> } => {
-    const errors: Record<string, string> = {};
-
-    // Required fields validation
-    if (!data.name_en?.trim()) errors.name_en = 'English name is required';
-    if (!data.name_ar?.trim()) errors.name_ar = 'Arabic name is required';
-    if (!data.description_en?.trim()) errors.description_en = 'English description is required';
-    if (!data.description_ar?.trim()) errors.description_ar = 'Arabic description is required';
-
-    // Coordinate validation
-    if (data.latitude < -90 || data.latitude > 90) {
-      errors.latitude = 'Latitude must be between -90 and 90';
-    }
-    if (data.longitude < -180 || data.longitude > 180) {
-      errors.longitude = 'Longitude must be between -180 and 180';
-    }
-
-    // City validation
-    if (!data.city) errors.city = 'City is required';
-
-    return {
-      isValid: Object.keys(errors).length === 0,
-      errors
-    };
-  }
 };

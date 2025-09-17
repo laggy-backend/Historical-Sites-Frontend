@@ -14,10 +14,10 @@ import {
   useTheme
 } from '../../styles';
 import { UserFriendlyFilters } from '../../types/historicalSites';
-import { referenceHelpers } from '../../services/referenceData';
+import { SORT_OPTIONS } from '../../services/filterMapping';
 
 interface ActiveFilter {
-  type: 'search' | 'city' | 'category' | 'tag' | 'sort';
+  type: 'search' | 'sort';
   label: string;
   value: string;
   onRemove: () => void;
@@ -26,9 +26,6 @@ interface ActiveFilter {
 interface ActiveFiltersProps {
   filters: UserFriendlyFilters;
   onRemoveSearch: () => void;
-  onRemoveCity: () => void;
-  onRemoveCategory: (category: string) => void;
-  onRemoveTag: (tag: string) => void;
   onRemoveSort: () => void;
   onClearAll: () => void;
 }
@@ -36,9 +33,6 @@ interface ActiveFiltersProps {
 export const ActiveFilters: React.FC<ActiveFiltersProps> = ({
   filters,
   onRemoveSearch,
-  onRemoveCity,
-  onRemoveCategory,
-  onRemoveTag,
   onRemoveSort,
   onClearAll
 }) => {
@@ -110,53 +104,18 @@ export const ActiveFilters: React.FC<ActiveFiltersProps> = ({
     });
   }
 
-  // City filter
-  if (filters.selectedCity) {
-    activeFilters.push({
-      type: 'city',
-      label: filters.selectedCity,
-      value: filters.selectedCity,
-      onRemove: onRemoveCity
-    });
-  }
-
-  // Category filters
-  filters.selectedCategories.forEach(category => {
-    activeFilters.push({
-      type: 'category',
-      label: referenceHelpers.formatSlugForDisplay(category),
-      value: category,
-      onRemove: () => onRemoveCategory(category)
-    });
-  });
-
-  // Tag filters
-  filters.selectedTags.forEach(tag => {
-    activeFilters.push({
-      type: 'tag',
-      label: referenceHelpers.formatSlugForDisplay(tag),
-      value: tag,
-      onRemove: () => onRemoveTag(tag)
-    });
-  });
 
   // Sort filter (only if not default)
   if (filters.sortBy !== 'newest') {
-    const sortLabels = {
-      'newest': 'Newest First',
-      'oldest': 'Oldest First',
-      'name_asc': 'Name A-Z',
-      'name_desc': 'Name Z-A',
-      'updated_newest': 'Recently Updated',
-      'updated_oldest': 'Least Recently Updated'
-    };
-
-    activeFilters.push({
-      type: 'sort',
-      label: sortLabels[filters.sortBy],
-      value: filters.sortBy,
-      onRemove: onRemoveSort
-    });
+    const selectedSort = SORT_OPTIONS.find(option => option.key === filters.sortBy);
+    if (selectedSort) {
+      activeFilters.push({
+        type: 'sort',
+        label: selectedSort.label,
+        value: filters.sortBy,
+        onRemove: onRemoveSort
+      });
+    }
   }
 
   // If no active filters, don't render anything

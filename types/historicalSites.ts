@@ -84,7 +84,7 @@ export interface CreateSiteData {
   categories?: number[];
 }
 
-export interface UpdateSiteData extends Partial<CreateSiteData> {}
+export type UpdateSiteData = Partial<CreateSiteData>;
 
 export interface MediaUploadData {
   file: File | any; // For React Native, this could be different
@@ -119,17 +119,11 @@ export interface ApiError {
 // Filter and search types
 export interface UserFriendlyFilters {
   search: string;
-  selectedCity?: string;           // City name, not ID
-  selectedCategories: string[];    // Category slugs, not IDs
-  selectedTags: string[];          // Tag slugs, not IDs
-  sortBy: 'newest' | 'oldest' | 'name_asc' | 'name_desc';
+  sortBy: 'newest' | 'oldest' | 'name_asc' | 'name_desc' | 'updated_newest' | 'updated_oldest';
 }
 
 export interface BackendFilters {
   search?: string;
-  city?: number;                   // Mapped to ID
-  categories?: string;             // Comma-separated IDs
-  tags?: string;                   // Comma-separated IDs
   ordering?: string;               // Mapped to backend format
   page?: number;
 }

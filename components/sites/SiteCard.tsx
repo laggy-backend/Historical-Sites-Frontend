@@ -81,11 +81,6 @@ export const SiteCard: React.FC<SiteCardProps> = ({ site, onPress }) => {
       color: theme.colors.textSecondary,
       fontSize: 14,
     },
-    description: {
-      ...createTypographyStyle(theme, 'body'),
-      color: theme.colors.textSecondary,
-      lineHeight: 20,
-    },
     metadata: {
       gap: theme.spacing.xs,
     },
@@ -126,10 +121,6 @@ export const SiteCard: React.FC<SiteCardProps> = ({ site, onPress }) => {
     });
   };
 
-  const truncateDescription = (text: string, maxLength: number = 120) => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength).trim() + '...';
-  };
 
   return (
     <TouchableOpacity
@@ -170,11 +161,6 @@ export const SiteCard: React.FC<SiteCardProps> = ({ site, onPress }) => {
           </Text>
         </View>
 
-        {/* Description */}
-        <Text style={styles.description} numberOfLines={3}>
-          {truncateDescription(site.description_en)}
-        </Text>
-
         {/* Metadata */}
         <View style={styles.metadata}>
           {/* Location */}
@@ -186,18 +172,6 @@ export const SiteCard: React.FC<SiteCardProps> = ({ site, onPress }) => {
             />
             <Text style={styles.metadataText}>
               {getCityName(site.city)}
-            </Text>
-          </View>
-
-          {/* Coordinates */}
-          <View style={styles.metadataRow}>
-            <Ionicons
-              name="navigate-outline"
-              size={16}
-              color={theme.colors.textSecondary}
-            />
-            <Text style={styles.metadataText}>
-              {siteHelpers.formatCoordinates(site.latitude, site.longitude)}
             </Text>
           </View>
 

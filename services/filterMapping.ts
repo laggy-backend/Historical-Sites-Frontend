@@ -1,11 +1,45 @@
 /**
  * Filter Mapping Service
- * Converts user-friendly filter names to backend API IDs and formats
+ * Converts user-friendly filter names to backend API formats
+ * Now only handles search and sorting (city/categories/tags filtering removed)
  */
 
-import { UserFriendlyFilters, BackendFilters, ReferenceData } from '../types/historicalSites';
-import { referenceHelpers } from './referenceData';
+import { UserFriendlyFilters, BackendFilters } from '../types/historicalSites';
 import { logger } from '../utils/logger';
+
+// Sort options for the UI dropdown
+export const SORT_OPTIONS = [
+  {
+    key: 'newest' as const,
+    label: 'Newest First',
+    icon: 'time-outline'
+  },
+  {
+    key: 'oldest' as const,
+    label: 'Oldest First',
+    icon: 'time-outline'
+  },
+  {
+    key: 'name_asc' as const,
+    label: 'Name A-Z',
+    icon: 'text-outline'
+  },
+  {
+    key: 'name_desc' as const,
+    label: 'Name Z-A',
+    icon: 'text-outline'
+  },
+  {
+    key: 'updated_newest' as const,
+    label: 'Recently Updated',
+    icon: 'refresh-outline'
+  },
+  {
+    key: 'updated_oldest' as const,
+    label: 'Least Recently Updated',
+    icon: 'refresh-outline'
+  }
+];
 
 // Sort mapping from user-friendly names to backend format
 const SORT_MAPPING = {
@@ -21,61 +55,12 @@ export const filterMapper = {
   /**
    * Convert user-friendly filters to backend API format
    */
-  toBackendFilters: (
-    userFilters: UserFriendlyFilters,
-    referenceData: ReferenceData
-  ): BackendFilters => {
+  toBackendFilters: (userFilters: UserFriendlyFilters): BackendFilters => {
     const backendFilters: BackendFilters = {};
 
     // Search text - pass through as-is
     if (userFilters.search?.trim()) {
       backendFilters.search = userFilters.search.trim();
-    }
-
-    // City filter - convert city name to ID
-    if (userFilters.selectedCity) {
-      const city = referenceHelpers.findCityByName(referenceData.cities, userFilters.selectedCity);
-      if (city) {
-        backendFilters.city = city.id;
-      } else {
-        logger.warn('filterMapping', 'City not found for name', { cityName: userFilters.selectedCity });
-      }
-    }
-
-    // Categories filter - convert category slugs to comma-separated IDs
-    if (userFilters.selectedCategories.length > 0) {
-      const categoryIds: number[] = [];
-
-      userFilters.selectedCategories.forEach(categorySlug => {
-        const category = referenceHelpers.findCategoryBySlug(referenceData.categories, categorySlug);
-        if (category) {
-          categoryIds.push(category.id);
-        } else {
-          logger.warn('filterMapping', 'Category not found for slug', { categorySlug });
-        }
-      });
-
-      if (categoryIds.length > 0) {
-        backendFilters.categories = categoryIds.join(',');
-      }
-    }
-
-    // Tags filter - convert tag slugs to comma-separated IDs
-    if (userFilters.selectedTags.length > 0) {
-      const tagIds: number[] = [];
-
-      userFilters.selectedTags.forEach(tagSlug => {
-        const tag = referenceHelpers.findTagBySlug(referenceData.tags, tagSlug);
-        if (tag) {
-          tagIds.push(tag.id);
-        } else {
-          logger.warn('filterMapping', 'Tag not found for slug', { tagSlug });
-        }
-      });
-
-      if (tagIds.length > 0) {
-        backendFilters.tags = tagIds.join(',');
-      }
     }
 
     // Sort mapping
@@ -90,101 +75,81 @@ export const filterMapper = {
   },
 
   /**
-   * Convert backend response to user-friendly format (for initializing filters from URL params, etc.)
+   * Convert backend response to user-friendly format
    */
-  fromBackendFilters: (
-    backendFilters: BackendFilters,
-    referenceData: ReferenceData
-  ): UserFriendlyFilters => {
+  fromBackendFilters: (backendFilters: BackendFilters): UserFriendlyFilters => {
     const userFilters: UserFriendlyFilters = {
       search: backendFilters.search || '',
-      selectedCity: undefined,
-      selectedCategories: [],
-      selectedTags: [],
       sortBy: 'newest'
     };
 
-    // Convert city ID to name
-    if (backendFilters.city) {
-      const city = referenceHelpers.findCityById(referenceData.cities, backendFilters.city);
-      if (city) {
-        userFilters.selectedCity = city.name_en;
-      }
-    }
-
-    // Convert category IDs to slugs
-    if (backendFilters.categories) {
-      const categoryIds = backendFilters.categories.split(',').map(id => parseInt(id.trim(), 10));
-      const categoryNames: string[] = [];
-
-      categoryIds.forEach(id => {
-        const category = referenceData.categories.find(cat => cat.id === id);
-        if (category) {
-          categoryNames.push(category.slug_en);
-        }
-      });
-
-      userFilters.selectedCategories = categoryNames;
-    }
-
-    // Convert tag IDs to slugs
-    if (backendFilters.tags) {
-      const tagIds = backendFilters.tags.split(',').map(id => parseInt(id.trim(), 10));
-      const tagNames: string[] = [];
-
-      tagIds.forEach(id => {
-        const tag = referenceData.tags.find(t => t.id === id);
-        if (tag) {
-          tagNames.push(tag.slug_en);
-        }
-      });
-
-      userFilters.selectedTags = tagNames;
-    }
-
-    // Convert ordering to user-friendly sort
+    // Convert backend ordering to user-friendly sort option
     if (backendFilters.ordering) {
-      const sortEntry = Object.entries(SORT_MAPPING).find(
-        ([, backendValue]) => backendValue === backendFilters.ordering
-      );
+      const sortEntry = Object.entries(SORT_MAPPING).find(([_, value]) => value === backendFilters.ordering);
       if (sortEntry) {
         userFilters.sortBy = sortEntry[0] as UserFriendlyFilters['sortBy'];
       }
     }
 
+    logger.info('filterMapping', 'Mapped backend filters to user format', {
+      backendFilters,
+      userFilters
+    });
+
     return userFilters;
   },
 
   /**
-   * Check if filters are empty (no active filtering)
+   * Clear all filters and return to defaults
    */
-  isEmptyFilter: (filters: UserFriendlyFilters): boolean => {
-    return (
-      !filters.search?.trim() &&
-      !filters.selectedCity &&
-      filters.selectedCategories.length === 0 &&
-      filters.selectedTags.length === 0 &&
-      filters.sortBy === 'newest'
-    );
+  clearAllFilters: (): UserFriendlyFilters => ({
+    search: '',
+    sortBy: 'newest'
+  }),
+
+  /**
+   * Remove a specific filter
+   */
+  removeFilter: (
+    currentFilters: UserFriendlyFilters,
+    filterType: 'search' | 'sort',
+    value?: string
+  ): UserFriendlyFilters => {
+    const newFilters = { ...currentFilters };
+
+    switch (filterType) {
+      case 'search':
+        newFilters.search = '';
+        break;
+      case 'sort':
+        newFilters.sortBy = 'newest';
+        break;
+    }
+
+    logger.info('filterMapping', 'Removed filter', {
+      filterType,
+      value,
+      oldFilters: currentFilters,
+      newFilters
+    });
+
+    return newFilters;
   },
 
   /**
-   * Get active filter count for display
+   * Count active filters (non-default values)
    */
   getActiveFilterCount: (filters: UserFriendlyFilters): number => {
     let count = 0;
 
     if (filters.search?.trim()) count++;
-    if (filters.selectedCity) count++;
-    if (filters.selectedCategories.length > 0) count += filters.selectedCategories.length;
-    if (filters.selectedTags.length > 0) count += filters.selectedTags.length;
     if (filters.sortBy !== 'newest') count++;
 
     return count;
   },
 
   /**
-   * Create filter summary for display
+   * Get human-readable summary of active filters
    */
   getFilterSummary: (filters: UserFriendlyFilters): string[] => {
     const summary: string[] = [];
@@ -193,107 +158,13 @@ export const filterMapper = {
       summary.push(`Search: "${filters.search}"`);
     }
 
-    if (filters.selectedCity) {
-      summary.push(`City: ${filters.selectedCity}`);
-    }
-
-    if (filters.selectedCategories.length > 0) {
-      if (filters.selectedCategories.length === 1) {
-        summary.push(`Category: ${referenceHelpers.formatSlugForDisplay(filters.selectedCategories[0])}`);
-      } else {
-        summary.push(`Categories: ${filters.selectedCategories.length} selected`);
-      }
-    }
-
-    if (filters.selectedTags.length > 0) {
-      if (filters.selectedTags.length === 1) {
-        summary.push(`Tag: ${referenceHelpers.formatSlugForDisplay(filters.selectedTags[0])}`);
-      } else {
-        summary.push(`Tags: ${filters.selectedTags.length} selected`);
-      }
-    }
-
     if (filters.sortBy !== 'newest') {
-      const sortLabels = {
-        'newest': 'Newest First',
-        'oldest': 'Oldest First',
-        'name_asc': 'Name A-Z',
-        'name_desc': 'Name Z-A',
-        'updated_newest': 'Recently Updated',
-        'updated_oldest': 'Least Recently Updated'
-      };
-      summary.push(`Sort: ${sortLabels[filters.sortBy]}`);
+      const selectedSort = SORT_OPTIONS.find(option => option.key === filters.sortBy);
+      if (selectedSort) {
+        summary.push(`Sort: ${selectedSort.label}`);
+      }
     }
 
     return summary;
-  },
-
-  /**
-   * Clear all filters except search
-   */
-  clearFilters: (keepSearch: boolean = false): UserFriendlyFilters => {
-    return {
-      search: keepSearch ? '' : '',
-      selectedCity: undefined,
-      selectedCategories: [],
-      selectedTags: [],
-      sortBy: 'newest'
-    };
-  },
-
-  /**
-   * Remove specific filter type
-   */
-  removeFilter: (
-    filters: UserFriendlyFilters,
-    filterType: 'search' | 'city' | 'sort',
-    value?: string
-  ): UserFriendlyFilters => {
-    const newFilters = { ...filters };
-
-    switch (filterType) {
-      case 'search':
-        newFilters.search = '';
-        break;
-      case 'city':
-        newFilters.selectedCity = undefined;
-        break;
-      case 'sort':
-        newFilters.sortBy = 'newest';
-        break;
-      default:
-        logger.warn('filterMapping', 'Unknown filter type to remove', { filterType });
-    }
-
-    return newFilters;
-  },
-
-  /**
-   * Remove specific category or tag
-   */
-  removeItemFilter: (
-    filters: UserFriendlyFilters,
-    type: 'category' | 'tag',
-    item: string
-  ): UserFriendlyFilters => {
-    const newFilters = { ...filters };
-
-    if (type === 'category') {
-      newFilters.selectedCategories = filters.selectedCategories.filter(cat => cat !== item);
-    } else if (type === 'tag') {
-      newFilters.selectedTags = filters.selectedTags.filter(tag => tag !== item);
-    }
-
-    return newFilters;
   }
 };
-
-// Export sort options for UI components
-export const SORT_OPTIONS = [
-  { key: 'newest', label: 'Newest First', icon: 'arrow-down' },
-  { key: 'oldest', label: 'Oldest First', icon: 'arrow-up' },
-  { key: 'name_asc', label: 'Name A-Z', icon: 'text' },
-  { key: 'name_desc', label: 'Name Z-A', icon: 'text' },
-  { key: 'updated_newest', label: 'Recently Updated', icon: 'time' },
-  { key: 'updated_oldest', label: 'Least Recently Updated', icon: 'time-outline' }
-] as const;

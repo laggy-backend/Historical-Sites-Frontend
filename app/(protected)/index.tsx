@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FilterBar } from '../../components/search/FilterBar';
@@ -32,6 +32,11 @@ export default function Explore() {
     refresh,
     getActiveFilterCount
   } = useSearch();
+
+  // Simple refresh on component mount/navigation
+  useEffect(() => {
+    refresh();
+  }, []);
 
   const styles = createStyles((theme) => ({
     container: {
@@ -189,6 +194,12 @@ export default function Explore() {
   const renderErrorState = () => (
     <View style={styles.errorContainer}>
       <Text style={styles.errorText}>{error}</Text>
+      <TouchableOpacity
+        style={styles.createButton}
+        onPress={handleRefresh}
+      >
+        <Text style={styles.createButtonText}>Try Again</Text>
+      </TouchableOpacity>
     </View>
   );
 

@@ -32,7 +32,8 @@ import {
   flexFull,
   getPlaceholderColor,
   rowCenter,
-  useTheme
+  useTheme,
+  createShadow
 } from '../../styles';
 import { useAuth } from '../../contexts/AuthContext';
 import { useReferenceData } from '../../contexts/ReferenceDataContext';
@@ -47,8 +48,7 @@ import {
   validateEnglishName,
   validateArabicName,
   validateEnglishDescription,
-  validateArabicDescription,
-  validateSiteCreationForm
+  validateArabicDescription
 } from '../../utils/validation';
 import { parseApiError, mapApiFieldToFormField } from '../../utils/errorParser';
 import { canCreateContent } from '../../utils/permissions';
@@ -158,7 +158,7 @@ export default function Upload() {
       backgroundColor: theme.colors.success,
     },
     scrollContainer: {
-      paddingBottom: theme.spacing.xl,
+      paddingBottom: 100, // Extra space for floating navigation buttons
     },
     formSection: {
       padding: theme.spacing.lg,
@@ -176,14 +176,6 @@ export default function Upload() {
     },
     inputContainer: {
       gap: theme.spacing.sm,
-    },
-    filterContainer: {
-      gap: theme.spacing.lg,
-    },
-    filterLabel: {
-      ...createTypographyStyle(theme, 'body'),
-      fontWeight: theme.fontWeight.medium,
-      marginBottom: theme.spacing.xs,
     },
     reviewSection: {
       padding: theme.spacing.lg,
@@ -210,11 +202,16 @@ export default function Upload() {
       fontStyle: 'italic',
     },
     navigationBar: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
       ...rowCenter,
       justifyContent: 'space-between',
       paddingHorizontal: theme.spacing.lg,
       paddingVertical: theme.spacing.md,
-      backgroundColor: theme.colors.background,
+      backgroundColor: 'transparent',
+      pointerEvents: 'box-none', // Allow touch events to pass through transparent areas
     },
     navButton: {
       ...createButtonStyle(theme, 'secondary', 'md', false),
@@ -239,11 +236,39 @@ export default function Upload() {
       opacity: 0.5,
     },
     arrowButton: {
-      padding: theme.spacing.sm,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: theme.colors.backgroundSecondary,
       justifyContent: 'center',
       alignItems: 'center',
-      minWidth: 40,
-      minHeight: 40,
+      ...createShadow(theme, 'md'),
+      pointerEvents: 'auto', // Ensure buttons are touchable
+    },
+    arrowButtonActive: {
+      backgroundColor: theme.colors.primary,
+    },
+    arrowButtonDisabled: {
+      backgroundColor: theme.colors.border,
+      opacity: 0.6,
+    },
+    createButton: {
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.md,
+      borderRadius: 24,
+      ...createShadow(theme, 'md'),
+      pointerEvents: 'auto', // Ensure button is touchable
+    },
+    createButtonText: {
+      ...createButtonTextStyle(theme, 'primary', 'md'),
+      fontWeight: theme.fontWeight.semibold,
+    },
+    dummyButton: {
+      padding: theme.spacing.sm,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.backgroundSecondary,
+      marginLeft: theme.spacing.md,
     },
   }))(theme);
 
@@ -279,6 +304,13 @@ export default function Upload() {
     if ('selectedCity' in updates) {
       delete newErrors.city;
     }
+    if ('mediaItems' in updates) {
+      delete newErrors.mediaItems;
+      // Media items are now optional, no validation needed
+      // if (!updates.mediaItems || updates.mediaItems.length === 0) {
+      //   newErrors.mediaItems = 'At least one image or video is required';
+      // }
+    }
 
     setErrors(newErrors);
   };
@@ -312,24 +344,38 @@ export default function Upload() {
         if (!formData.selectedCity) {
           newErrors.city = 'City selection is required';
         }
+        // Media is optional in the new approach
+        // if (formData.mediaItems.length === 0) {
+        //   newErrors.mediaItems = 'At least one image or video is required';
+        // }
         break;
 
       case 'review':
         // Final comprehensive validation using all validation rules
-        const finalErrors = validateSiteCreationForm({
-          name_en: formData.name_en,
-          name_ar: formData.name_ar,
-          description_en: formData.description_en,
-          description_ar: formData.description_ar,
-          coordinate: formData.coordinate,
-          selectedCity: formData.selectedCity
-        });
-        Object.assign(newErrors, finalErrors);
+        const finalNameEnError = validateEnglishName(formData.name_en);
+        if (finalNameEnError) newErrors.name_en = finalNameEnError;
 
-        // Validate that at least one media item is provided
-        if (formData.mediaItems.length === 0) {
-          newErrors.mediaItems = 'At least one image or video is required';
+        const finalNameArError = validateArabicName(formData.name_ar);
+        if (finalNameArError) newErrors.name_ar = finalNameArError;
+
+        const finalDescEnError = validateEnglishDescription(formData.description_en);
+        if (finalDescEnError) newErrors.description_en = finalDescEnError;
+
+        const finalDescArError = validateArabicDescription(formData.description_ar);
+        if (finalDescArError) newErrors.description_ar = finalDescArError;
+
+        if (!formData.coordinate) {
+          newErrors.coordinate = 'Location is required';
         }
+
+        if (!formData.selectedCity) {
+          newErrors.city = 'City selection is required';
+        }
+
+        // Media is optional in the new approach
+        // if (formData.mediaItems.length === 0) {
+        //   newErrors.mediaItems = 'At least one image or video is required';
+        // }
         break;
     }
 
@@ -363,13 +409,14 @@ export default function Upload() {
     try {
       setIsLoading(true);
 
-      // Convert user-friendly names to IDs
+      // Convert user-selected city to ID
       const city = findCityByName(formData.selectedCity!);
       if (!city) {
         Alert.alert('Error', 'Selected city not found');
         return;
       }
 
+      // Convert user-selected categories and tags to IDs
       const categoryIds = formData.selectedCategories
         .map(slug => findCategoryBySlug(slug)?.id)
         .filter(id => id !== undefined) as number[];
@@ -386,48 +433,52 @@ export default function Upload() {
         latitude: formData.coordinate!.latitude,
         longitude: formData.coordinate!.longitude,
         city: city.id,
-        categories: categoryIds.length > 0 ? categoryIds : undefined,
-        tags: tagIds.length > 0 ? tagIds : undefined
+        // Only include categories and tags if they have values
+        ...(categoryIds.length > 0 && { categories: categoryIds }),
+        ...(tagIds.length > 0 && { tags: tagIds })
       };
 
-      const response = await historicalSitesApi.createSite(siteData);
+      // Step 1: Create the historical site without media
+      const siteResponse = await historicalSitesApi.createSite(siteData);
 
-      if (response.success) {
-        const siteId = response.data.id;
+      if (!siteResponse.success) {
+        Alert.alert('Error', 'Failed to create site');
+        return;
+      }
 
-        // Clear the form after successful creation
-        setFormData(INITIAL_FORM_DATA);
-        setCurrentStep('basic');
-        setErrors({});
+      const siteId = siteResponse.data.id;
 
-        // Upload media files if any
-        if (formData.mediaItems.length > 0) {
-          try {
-            await historicalSitesApi.uploadSiteMedia(siteId, formData.mediaItems);
-          } catch (mediaError) {
-            console.error('Media upload error:', mediaError);
-            const parsedMediaError = parseApiError(mediaError);
+      // Step 2: Upload media files if any
+      if (formData.mediaItems.length > 0) {
+        try {
+          const mediaResponse = await historicalSitesApi.uploadSiteMedia(siteId, formData.mediaItems);
 
-            // Site was created but media upload failed
+          if (!mediaResponse.success) {
+            console.warn('Media upload failed, but site was created successfully');
             Alert.alert(
               'Partial Success',
-              `Site created successfully, but media upload failed: ${parsedMediaError.generalMessage}. You can add media later from the site details.`,
-              [
-                {
-                  text: 'OK',
-                  onPress: () => router.push(`/sites/${siteId}?from=creation`)
-                }
-              ]
+              'Site was created but some media files failed to upload. You can add them later.',
+              [{ text: 'OK' }]
             );
-            return;
+          } else {
           }
+        } catch (mediaError) {
+          console.error('Media upload error:', mediaError);
+          Alert.alert(
+            'Partial Success',
+            'Site was created but media upload failed. You can add media files later.',
+            [{ text: 'OK' }]
+          );
         }
-
-        // Auto-navigate to the created site
-        router.push(`/sites/${siteId}?from=creation`);
-      } else {
-        Alert.alert('Error', 'Failed to create site');
       }
+
+      // Clear the form after successful creation
+      setFormData(INITIAL_FORM_DATA);
+      setCurrentStep('basic');
+      setErrors({});
+
+      // Auto-navigate to the created site
+      router.push(`/sites/${siteId}?from=creation`);
     } catch (error) {
       console.error('Site creation error:', error);
 
@@ -459,12 +510,6 @@ export default function Upload() {
               case 'city':
                 newErrors.city = fieldErrors[0];
                 break;
-              case 'selectedCategories':
-                newErrors.selectedCategories = fieldErrors[0];
-                break;
-              case 'selectedTags':
-                newErrors.selectedTags = fieldErrors[0];
-                break;
               case 'mediaItems':
                 newErrors.mediaItems = fieldErrors[0];
                 break;
@@ -482,9 +527,9 @@ export default function Upload() {
             case 'location':
               return !!newErrors.coordinate;
             case 'metadata':
-              return !!(newErrors.city || newErrors.selectedCategories || newErrors.selectedTags);
+              return !!(newErrors.city || newErrors.mediaItems);
             case 'review':
-              return !!newErrors.mediaItems;
+              return false; // All errors are handled in previous steps
             default:
               return false;
           }
@@ -540,12 +585,30 @@ export default function Upload() {
     );
   };
 
+  const fillDummyData = () => {
+    updateFormData({
+      name_en: 'Ancient Castle of Damascus',
+      name_ar: 'قلعة دمشق القديمة',
+      description_en: 'A magnificent medieval fortress that has stood for over 800 years, representing the architectural prowess of the Ayyubid dynasty. This historical monument has witnessed countless battles and served as a symbol of resistance throughout various periods of history.',
+      description_ar: 'قلعة رائعة من العصور الوسطى صمدت لأكثر من 800 عام، وتمثل البراعة المعمارية للدولة الأيوبية. شهد هذا النصب التاريخي معارك لا تحصى وكان رمزاً للمقاومة عبر فترات مختلفة من التاريخ.'
+    });
+  };
+
   const renderBasicInfoStep = () => (
     <View style={styles.formSection}>
-      <Text style={styles.stepTitle}>Basic Information</Text>
-      <Text style={styles.stepDescription}>
-        Enter the name and description of the historical site in both English and Arabic.
-      </Text>
+      <View style={[rowCenter, { justifyContent: 'space-between' }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.stepTitle}>Basic Information</Text>
+          <Text style={styles.stepDescription}>
+            Enter the name and description of the historical site in both English and Arabic.
+          </Text>
+        </View>
+        {user?.role === 'admin' && (
+          <TouchableOpacity onPress={fillDummyData} style={styles.dummyButton}>
+            <Ionicons name="dice" size={20} color={theme.colors.primary} />
+          </TouchableOpacity>
+        )}
+      </View>
 
       <View style={styles.inputContainer}>
         <Text style={createInputLabelStyle(theme, !!errors.name_en, isLoading)}>
@@ -657,50 +720,57 @@ export default function Upload() {
     <View style={styles.formSection}>
       <Text style={styles.stepTitle}>Additional Details</Text>
       <Text style={styles.stepDescription}>
-        Select the city, categories, and tags for this historical site.
+        Select the city and add photos and videos to showcase this historical site.
       </Text>
 
-      <View style={styles.filterContainer}>
-        <View style={styles.inputContainer}>
-          <Text style={styles.filterLabel}>City *</Text>
-          <CityFilter
-            selectedCity={formData.selectedCity}
-            onCityChange={(city) => updateFormData({ selectedCity: city })}
-            disabled={isLoading}
-          />
-          {errors.city && <Text style={createInputErrorStyle(theme)}>{errors.city}</Text>}
-        </View>
+      <View style={styles.inputContainer}>
+        <Text style={createInputLabelStyle(theme, !!errors.city, isLoading)}>
+          City *
+        </Text>
+        <CityFilter
+          selectedCity={formData.selectedCity}
+          onCityChange={(city) => updateFormData({ selectedCity: city })}
+          disabled={isLoading}
+        />
+        {errors.city && <Text style={createInputErrorStyle(theme)}>{errors.city}</Text>}
+      </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.filterLabel}>Categories</Text>
-          <CategoryFilter
-            selectedCategories={formData.selectedCategories}
-            onCategoriesChange={(categories) => updateFormData({ selectedCategories: categories })}
-            disabled={isLoading}
-          />
-        </View>
+      <View style={styles.inputContainer}>
+        <Text style={createInputLabelStyle(theme, false, isLoading)}>
+          Categories (Optional)
+        </Text>
+        <CategoryFilter
+          selectedCategories={formData.selectedCategories}
+          onCategoriesChange={(categories) => updateFormData({ selectedCategories: categories })}
+          disabled={isLoading}
+        />
+      </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.filterLabel}>Tags</Text>
-          <TagFilter
-            selectedTags={formData.selectedTags}
-            onTagsChange={(tags) => updateFormData({ selectedTags: tags })}
-            disabled={isLoading}
-          />
-        </View>
+      <View style={styles.inputContainer}>
+        <Text style={createInputLabelStyle(theme, false, isLoading)}>
+          Tags (Optional)
+        </Text>
+        <TagFilter
+          selectedTags={formData.selectedTags}
+          onTagsChange={(tags) => updateFormData({ selectedTags: tags })}
+          disabled={isLoading}
+        />
+      </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={createInputLabelStyle(theme, !!errors.mediaItems, isLoading)}>
-            Media Files *
-          </Text>
-          <MediaPicker
-            mediaItems={formData.mediaItems}
-            onMediaChange={(items) => updateFormData({ mediaItems: items })}
-            disabled={isLoading}
-            maxItems={10}
-          />
-          {errors.mediaItems && <Text style={createInputErrorStyle(theme)}>{errors.mediaItems}</Text>}
-        </View>
+      <View style={styles.inputContainer}>
+        <Text style={createInputLabelStyle(theme, !!errors.mediaItems, isLoading)}>
+          Media Files (Optional)
+        </Text>
+        <Text style={[createTypographyStyle(theme, 'caption'), { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm }]}>
+          Add photos and videos to showcase this historical site. You can also add media files after creating the site.
+        </Text>
+        <MediaPicker
+          mediaItems={formData.mediaItems}
+          onMediaChange={(items) => updateFormData({ mediaItems: items })}
+          disabled={isLoading}
+          maxItems={10}
+        />
+        {errors.mediaItems && <Text style={createInputErrorStyle(theme)}>{errors.mediaItems}</Text>}
       </View>
     </View>
   );
@@ -792,7 +862,7 @@ export default function Upload() {
       case 'location':
         return !!formData.coordinate;
       case 'metadata':
-        return !!formData.selectedCity;
+        return !!formData.selectedCity; // Media is now optional
       case 'review':
         return false; // No next on review step
       default:
@@ -853,48 +923,55 @@ export default function Upload() {
         >
           {renderStepContent()}
         </ScrollView>
+      </KeyboardAvoidingView>
 
-        {/* Navigation Bar */}
-        <View style={styles.navigationBar}>
+      {/* Floating Navigation Bar */}
+      <View style={styles.navigationBar}>
+        {!isFirstStep && (
           <TouchableOpacity
             style={styles.arrowButton}
             onPress={handlePrevious}
-            disabled={isFirstStep || isLoading}
+            disabled={isLoading}
           >
             <Ionicons
               name="chevron-back"
               size={24}
-              color={isFirstStep ? theme.colors.textSecondary : theme.colors.textPrimary}
+              color={theme.colors.textPrimary}
             />
           </TouchableOpacity>
+        )}
+        {isFirstStep && <View style={{ width: 48 }} />}
 
-          {isLastStep ? (
-            <TouchableOpacity
-              style={styles.navButtonPrimary}
-              onPress={handleSubmit}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color={theme.colors.textInverse} />
-              ) : (
-                <Text style={styles.navButtonTextPrimary}>Create Site</Text>
-              )}
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.arrowButton}
-              onPress={handleNext}
-              disabled={!canGoNext() || isLoading}
-            >
-              <Ionicons
-                name="chevron-forward"
-                size={24}
-                color={canGoNext() ? theme.colors.primary : theme.colors.textSecondary}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+        {isLastStep ? (
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={handleSubmit}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color={theme.colors.textInverse} />
+            ) : (
+              <Text style={styles.createButtonText}>Create Site</Text>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.arrowButton,
+              canGoNext() && styles.arrowButtonActive,
+              (!canGoNext() || isLoading) && styles.arrowButtonDisabled
+            ]}
+            onPress={handleNext}
+            disabled={!canGoNext() || isLoading}
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={canGoNext() ? theme.colors.textInverse : theme.colors.textSecondary}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
     </SafeAreaView>
   );
 }

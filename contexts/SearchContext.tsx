@@ -4,10 +4,9 @@
  * Follows the same pattern as AuthContext
  */
 
-import React, { createContext, ReactNode, useContext, useState, useCallback, useEffect } from 'react';
-import { historicalSitesApi, siteHelpers } from '../services/historicalSites';
+import React, { createContext, ReactNode, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import { historicalSitesApi } from '../services/historicalSites';
 import { filterMapper } from '../services/filterMapping';
-import { useReferenceData } from './ReferenceDataContext';
 import {
   HistoricalSite,
   UserFriendlyFilters,
@@ -47,9 +46,7 @@ interface SearchContextType extends SearchState {
   // Filter actions
   updateFilters: (newFilters: Partial<UserFriendlyFilters>) => Promise<void>;
   clearFilters: () => Promise<void>;
-  removeFilter: (filterType: 'search' | 'city' | 'sort', value?: string) => Promise<void>;
-  removeCategoryFilter: (category: string) => Promise<void>;
-  removeTagFilter: (tag: string) => Promise<void>;
+  removeFilter: (filterType: 'search' | 'sort', value?: string) => Promise<void>;
 
   // Utility functions
   getActiveFilterCount: () => number;
@@ -72,14 +69,10 @@ interface SearchProviderProps {
 
 const INITIAL_FILTERS: UserFriendlyFilters = {
   search: '',
-  selectedCity: undefined,
-  selectedCategories: [],
-  selectedTags: [],
   sortBy: 'newest'
 };
 
 export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
-  const { data: referenceData, isLoading: refDataLoading } = useReferenceData();
 
   const [state, setState] = useState<SearchState>({
     sites: [],
@@ -95,18 +88,21 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
 
   // Debounced search effect for text input
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  // Auto-retry timeout for network errors
+  const [retryTimeout, setRetryTimeout] = useState<NodeJS.Timeout | null>(null);
 
   const performSearch = useCallback(async (
     searchFilters: UserFriendlyFilters,
     page: number = 1,
     append: boolean = false
   ): Promise<void> => {
-    if (!referenceData) {
-      logger.warn('search', 'Cannot search without reference data');
-      return;
-    }
-
     try {
+      // Clear any pending retry timeout
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+        setRetryTimeout(null);
+      }
+
       // Set appropriate loading state
       setState(prev => ({
         ...prev,
@@ -118,7 +114,7 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
       logger.info('search', 'Performing search', { filters: searchFilters, page, append });
 
       // Convert user-friendly filters to backend format
-      const backendFilters = filterMapper.toBackendFilters(searchFilters, referenceData);
+      const backendFilters = filterMapper.toBackendFilters(searchFilters);
       const queryParams = { ...backendFilters, page };
 
       // Make API call
@@ -163,8 +159,17 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
         isRefreshing: false,
         error: errorMessage
       }));
+
+      // Auto-retry for network errors
+      if (error instanceof AxiosError && apiHelpers.isNetworkError(error)) {
+        const timeout = setTimeout(() => {
+          logger.info('search', 'Auto-retrying after network error');
+          performSearch(searchFilters, page, append);
+        }, 5000); // Retry after 5 seconds
+        setRetryTimeout(timeout);
+      }
     }
-  }, [referenceData]);
+  }, []);
 
   // Search function with debouncing for text search
   const search = useCallback(async (
@@ -229,22 +234,13 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
   }, [search]);
 
   const removeFilter = useCallback(async (
-    filterType: 'search' | 'city' | 'sort',
+    filterType: 'search' | 'sort',
     value?: string
   ): Promise<void> => {
     const clearedFilters = filterMapper.removeFilter(state.filters, filterType, value);
     await search(clearedFilters, true);
   }, [state.filters, search]);
 
-  const removeCategoryFilter = useCallback(async (category: string): Promise<void> => {
-    const updatedFilters = filterMapper.removeItemFilter(state.filters, 'category', category);
-    await search(updatedFilters, true);
-  }, [state.filters, search]);
-
-  const removeTagFilter = useCallback(async (tag: string): Promise<void> => {
-    const updatedFilters = filterMapper.removeItemFilter(state.filters, 'tag', tag);
-    await search(updatedFilters, true);
-  }, [state.filters, search]);
 
   // Utility functions
   const getActiveFilterCount = useCallback((): number => {
@@ -255,45 +251,48 @@ export const SearchProvider: React.FC<SearchProviderProps> = ({ children }) => {
     return filterMapper.getFilterSummary(state.filters);
   }, [state.filters]);
 
-  // Initial search when reference data loads
+  // Initial search on component mount
   useEffect(() => {
-    if (referenceData && !refDataLoading && state.sites.length === 0 && !state.isLoading) {
+    if (state.sites.length === 0 && !state.isLoading && !state.error) {
       // Perform initial search with default filters
       performSearch(INITIAL_FILTERS, 1, false);
     }
-  }, [referenceData, refDataLoading, state.sites.length, state.isLoading, performSearch]);
+  }, [state.sites.length, state.isLoading, state.error]);
 
-  // Cleanup timeout on unmount
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (searchTimeout) {
         clearTimeout(searchTimeout);
       }
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
     };
-  }, [searchTimeout]);
+  }, [searchTimeout, retryTimeout]);
+
+  const contextValue = useMemo(() => ({
+    // State
+    ...state,
+
+    // Actions
+    search,
+    loadMore,
+    refresh,
+    clearSearch,
+
+    // Filter actions
+    updateFilters,
+    clearFilters,
+    removeFilter,
+
+    // Utilities
+    getActiveFilterCount,
+    getFilterSummary
+  }), [state, search, loadMore, refresh, clearSearch, updateFilters, clearFilters, removeFilter, getActiveFilterCount, getFilterSummary]);
 
   return (
-    <SearchContext.Provider value={{
-      // State
-      ...state,
-
-      // Actions
-      search,
-      loadMore,
-      refresh,
-      clearSearch,
-
-      // Filter actions
-      updateFilters,
-      clearFilters,
-      removeFilter,
-      removeCategoryFilter,
-      removeTagFilter,
-
-      // Utilities
-      getActiveFilterCount,
-      getFilterSummary
-    }}>
+    <SearchContext.Provider value={contextValue}>
       {children}
     </SearchContext.Provider>
   );

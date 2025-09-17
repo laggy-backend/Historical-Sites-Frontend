@@ -7,7 +7,7 @@ import { TextStyle, ViewStyle } from 'react-native';
 import { Theme } from '../theme/variants';
 import { createButtonBase, centerContent } from '../utils/mixins';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 /**
@@ -49,14 +49,6 @@ export const createButtonStyle = (
       backgroundColor: disabled ? theme.colors.backgroundTertiary : theme.colors.backgroundSecondary,
       borderWidth: 1,
       borderColor: theme.colors.border,
-    },
-    outline: {
-      backgroundColor: 'transparent',
-      borderWidth: 1,
-      borderColor: disabled ? theme.colors.textTertiary : theme.colors.primary,
-    },
-    ghost: {
-      backgroundColor: 'transparent',
     },
     danger: {
       backgroundColor: disabled ? theme.colors.textTertiary : theme.colors.error,
@@ -101,14 +93,6 @@ export const createButtonTextStyle = (
     },
     secondary: {
       color: theme.colors.textPrimary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    outline: {
-      color: disabled ? theme.colors.textTertiary : theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    ghost: {
-      color: disabled ? theme.colors.textTertiary : theme.colors.primary,
       fontWeight: theme.fontWeight.medium,
     },
     danger: {

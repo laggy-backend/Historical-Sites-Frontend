@@ -1,8 +1,8 @@
 /**
  * Media Picker Component
  * Allows users to select and preview multiple images and videos for historical sites
- * Supports: Images (jpg, jpeg, png, gif, webp - max 10MB) and Videos (mp4, avi, mov, wmv, flv, webm, mkv - max 100MB)
- * Follows existing component patterns and styling
+ * Uses expo-image-picker for proper gallery/camera access instead of file system
+ * Supports: Images (jpg, jpeg, png, gif, webp - max 10MB) and Videos (mp4, mov - max 100MB)
  */
 
 import React, { useState } from 'react';
@@ -12,11 +12,13 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  ActionSheetIOS,
+  Platform
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import {
   createButtonStyle,
   createButtonTextStyle,
@@ -30,10 +32,14 @@ export interface MediaItem {
   uri: string;
   name: string;
   type: string;
-  size: number;
+  size?: number;
+  width?: number;
+  height?: number;
   title?: string;
   caption?: string;
   is_thumbnail?: boolean;
+  // File object for upload (created from uri)
+  file?: any;
 }
 
 interface MediaPickerProps {
@@ -171,70 +177,162 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
     }
   }))(theme);
 
-  const pickImages = async () => {
-    if (disabled || isLoading) return;
+  const requestPermissions = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Required',
+        'Please allow access to your photo library to select images and videos.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const showMediaOptions = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Camera', 'Photo Library'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            openCamera();
+          } else if (buttonIndex === 2) {
+            openGallery();
+          }
+        }
+      );
+    } else {
+      Alert.alert(
+        'Select Media',
+        'Choose an option',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Camera', onPress: openCamera },
+          { text: 'Gallery', onPress: openGallery },
+        ]
+      );
+    }
+  };
+
+  const openCamera = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
 
     try {
       setIsLoading(true);
-
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'video/*'],
-        multiple: true,
-        copyToCacheDirectory: true,
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsEditing: false,
+        quality: 0.8,
+        allowsMultipleSelection: false,
       });
 
-      if (!result.canceled) {
-        const validItems: MediaItem[] = [];
-        const invalidItems: string[] = [];
-
-        for (const [index, asset] of result.assets.entries()) {
-          const isImage = asset.mimeType?.startsWith('image/');
-          const isVideo = asset.mimeType?.startsWith('video/');
-          const maxSize = isImage ? 10 * 1024 * 1024 : 100 * 1024 * 1024; // 10MB for images, 100MB for videos
-
-          if (!isImage && !isVideo) {
-            invalidItems.push(`${asset.name} (unsupported file type)`);
-            continue;
-          }
-
-          if (asset.size && asset.size > maxSize) {
-            const maxMB = isImage ? '10MB' : '100MB';
-            invalidItems.push(`${asset.name} (exceeds ${maxMB} limit)`);
-            continue;
-          }
-
-          validItems.push({
-            uri: asset.uri,
-            name: asset.name,
-            type: asset.mimeType || (isImage ? 'image/jpeg' : 'video/mp4'),
-            size: asset.size || 0,
-            is_thumbnail: mediaItems.length === 0 && index === 0 && isImage, // Only images can be thumbnails
-          });
-        }
-
-        if (invalidItems.length > 0) {
-          Alert.alert(
-            'Invalid Files',
-            `The following files were skipped:\n• ${invalidItems.join('\n• ')}`
-          );
-        }
-
-        const totalItems = mediaItems.length + validItems.length;
-        if (totalItems > maxItems) {
-          Alert.alert(
-            'Too Many Files',
-            `You can only select up to ${maxItems} files. ${totalItems - maxItems} file(s) will be ignored.`
-          );
-          const allowedItems = validItems.slice(0, maxItems - mediaItems.length);
-          onMediaChange([...mediaItems, ...allowedItems]);
-        } else {
-          onMediaChange([...mediaItems, ...validItems]);
-        }
+      if (!result.canceled && result.assets.length > 0) {
+        const asset = result.assets[0];
+        await processSelectedMedia([asset]);
       }
     } catch {
-      Alert.alert('Error', 'Failed to pick images. Please try again.');
+      Alert.alert('Error', 'Failed to take photo/video. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openGallery = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    try {
+      setIsLoading(true);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsEditing: false,
+        quality: 0.8,
+        allowsMultipleSelection: true,
+        selectionLimit: maxItems - mediaItems.length,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        await processSelectedMedia(result.assets);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to select media. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const processSelectedMedia = async (assets: ImagePicker.ImagePickerAsset[]) => {
+    const validItems: MediaItem[] = [];
+    const invalidItems: string[] = [];
+
+    for (const [index, asset] of assets.entries()) {
+      const isImage = asset.type === 'image';
+      const maxSize = isImage ? 10 * 1024 * 1024 : 100 * 1024 * 1024; // 10MB for images, 100MB for videos
+
+      // Generate a name from URI if not provided
+      const fileName = asset.fileName || asset.uri.split('/').pop() || `${isImage ? 'image' : 'video'}_${Date.now()}`;
+
+      // Estimate file size if not provided (rough estimate based on dimensions and type)
+      let estimatedSize = 0;
+      if (asset.fileSize) {
+        estimatedSize = asset.fileSize;
+      } else if (asset.width && asset.height) {
+        // Rough size estimation
+        estimatedSize = isImage
+          ? (asset.width * asset.height * 3) // RGB
+          : (asset.width * asset.height * 1.5 * (asset.duration || 10)); // Video estimation
+      }
+
+      if (estimatedSize > maxSize) {
+        const maxMB = isImage ? '10MB' : '100MB';
+        invalidItems.push(`${fileName} (estimated size exceeds ${maxMB} limit)`);
+        continue;
+      }
+
+      // Create file object for upload - React Native FormData compatible format
+      // Use mimeType from asset if available, otherwise fallback to generic types
+      const fileType = asset.mimeType || (isImage ? 'image/jpeg' : 'video/mp4');
+
+      const fileObject = {
+        uri: asset.uri,
+        name: fileName,
+        type: fileType
+      };
+
+      validItems.push({
+        uri: asset.uri,
+        name: fileName,
+        type: fileType,
+        size: estimatedSize,
+        width: asset.width,
+        height: asset.height,
+        is_thumbnail: mediaItems.length === 0 && index === 0 && isImage, // Only first image can be thumbnail
+        file: fileObject
+      });
+    }
+
+    if (invalidItems.length > 0) {
+      Alert.alert(
+        'Invalid Files',
+        `The following files were skipped:\n• ${invalidItems.join('\n• ')}`
+      );
+    }
+
+    const totalItems = mediaItems.length + validItems.length;
+    if (totalItems > maxItems) {
+      Alert.alert(
+        'Too Many Files',
+        `You can only select up to ${maxItems} files. ${totalItems - maxItems} file(s) will be ignored.`
+      );
+      const allowedItems = validItems.slice(0, maxItems - mediaItems.length);
+      onMediaChange([...mediaItems, ...allowedItems]);
+    } else {
+      onMediaChange([...mediaItems, ...validItems]);
     }
   };
 
@@ -243,9 +341,12 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
     const removedItem = newItems[index];
     newItems.splice(index, 1);
 
-    // If we removed the thumbnail and there are other items, make the first one the thumbnail
+    // If we removed the thumbnail and there are other items, make the first image the thumbnail
     if (removedItem.is_thumbnail && newItems.length > 0) {
-      newItems[0].is_thumbnail = true;
+      const firstImage = newItems.find(item => item.type.startsWith('image/'));
+      if (firstImage) {
+        firstImage.is_thumbnail = true;
+      }
     }
 
     onMediaChange(newItems);
@@ -334,7 +435,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
             {canAddMore && (
               <TouchableOpacity
                 style={[styles.addButton, !canAddMore && styles.addButtonDisabled]}
-                onPress={pickImages}
+                onPress={showMediaOptions}
                 disabled={!canAddMore || isLoading}
               >
                 {isLoading ? (

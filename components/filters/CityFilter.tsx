@@ -4,16 +4,19 @@
  * Follows existing styling patterns
  */
 
-import React, { useState } from 'react';
-import { Text, TouchableOpacity, Modal, View, FlatList, Pressable } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { Text, TouchableOpacity, Modal, View, FlatList, Pressable, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   createButtonStyle,
   createButtonTextStyle,
+  createInputStyle,
+  createInputTextStyle,
   createStyles,
   createTypographyStyle,
   flexFull,
+  getPlaceholderColor,
   rowCenter,
   useTheme
 } from '../../styles';
@@ -34,8 +37,21 @@ export const CityFilter: React.FC<CityFilterProps> = ({
   const { theme } = useTheme();
   const { data } = useReferenceData();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const cities = data?.cities || [];
+
+  // Filter cities based on search query
+  const filteredCities = useMemo(() => {
+    const citiesList = data?.cities || [];
+    if (!searchQuery.trim()) return citiesList;
+
+    const query = searchQuery.toLowerCase().trim();
+    return citiesList.filter(city =>
+      city.name_en.toLowerCase().includes(query) ||
+      city.name_ar.includes(query)
+    );
+  }, [data?.cities, searchQuery]);
 
   const styles = createStyles((theme) => ({
     filterButton: {
@@ -107,12 +123,38 @@ export const CityFilter: React.FC<CityFilterProps> = ({
       ...createTypographyStyle(theme, 'body'),
       color: theme.colors.primary,
       fontWeight: theme.fontWeight.medium,
+    },
+    searchContainer: {
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    searchInput: {
+      ...createInputStyle(theme, 'default', 'md', false, false, false),
+      ...createInputTextStyle(theme, 'md', false),
+    },
+    noResultsContainer: {
+      paddingVertical: theme.spacing.xl,
+      paddingHorizontal: theme.spacing.lg,
+      alignItems: 'center',
+    },
+    noResultsText: {
+      ...createTypographyStyle(theme, 'body'),
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
     }
   }))(theme);
 
   const handleCitySelect = (city: City | null) => {
     onCityChange(city?.name_en);
     setIsModalOpen(false);
+    setSearchQuery(''); // Clear search when modal closes
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setSearchQuery(''); // Clear search when modal closes
   };
 
   const renderCityItem = ({ item }: { item: City }) => {
@@ -164,11 +206,11 @@ export const CityFilter: React.FC<CityFilterProps> = ({
         visible={isModalOpen}
         transparent
         animationType="slide"
-        onRequestClose={() => setIsModalOpen(false)}
+        onRequestClose={handleModalClose}
       >
         <Pressable
           style={styles.modalOverlay}
-          onPress={() => setIsModalOpen(false)}
+          onPress={handleModalClose}
         >
           <Pressable
             style={styles.modalContent}
@@ -179,7 +221,7 @@ export const CityFilter: React.FC<CityFilterProps> = ({
                 <Text style={styles.modalTitle}>Select City</Text>
                 <TouchableOpacity
                   style={styles.closeButton}
-                  onPress={() => setIsModalOpen(false)}
+                  onPress={handleModalClose}
                 >
                   <Ionicons
                     name="close"
@@ -189,9 +231,22 @@ export const CityFilter: React.FC<CityFilterProps> = ({
                 </TouchableOpacity>
               </View>
 
+              {/* Search Input */}
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search cities..."
+                  placeholderTextColor={getPlaceholderColor(theme)}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCorrect={false}
+                  clearButtonMode="while-editing"
+                />
+              </View>
+
               <FlatList
                 style={styles.cityList}
-                data={cities}
+                data={filteredCities}
                 renderItem={renderCityItem}
                 keyExtractor={(item) => item.id.toString()}
                 ListHeaderComponent={
@@ -201,6 +256,15 @@ export const CityFilter: React.FC<CityFilterProps> = ({
                   >
                     <Text style={styles.clearAllText}>All Cities</Text>
                   </TouchableOpacity>
+                }
+                ListEmptyComponent={
+                  searchQuery.trim() ? (
+                    <View style={styles.noResultsContainer}>
+                      <Text style={styles.noResultsText}>
+                        No cities found matching &ldquo;{searchQuery}&rdquo;
+                      </Text>
+                    </View>
+                  ) : null
                 }
                 showsVerticalScrollIndicator={false}
               />

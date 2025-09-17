@@ -134,7 +134,7 @@ export interface SiteValidationErrors {
   description_en?: string;
   description_ar?: string;
   coordinate?: string;
-  city?: string;
+  mediaItems?: string;
 }
 
 export const validateSiteCreationForm = (formData: {
@@ -143,7 +143,7 @@ export const validateSiteCreationForm = (formData: {
   description_en: string;
   description_ar: string;
   coordinate?: { latitude: number; longitude: number };
-  selectedCity?: string;
+  mediaItems?: any[];
 }): SiteValidationErrors => {
   const errors: SiteValidationErrors = {};
 
@@ -173,9 +173,9 @@ export const validateSiteCreationForm = (formData: {
     else if (lngError) errors.coordinate = lngError;
   }
 
-  // Validate city selection
-  if (!formData.selectedCity) {
-    errors.city = 'City selection is required';
+  // Validate media items
+  if (!formData.mediaItems || formData.mediaItems.length === 0) {
+    errors.mediaItems = 'At least one image or video is required';
   }
 
   return errors;

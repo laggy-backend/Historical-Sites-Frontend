@@ -21,7 +21,7 @@ export const API_ENDPOINTS = {
     DETAIL: (id: number) => `/historical-sites/sites/${id}/`,
     UPDATE: (id: number) => `/historical-sites/sites/${id}/`,
     DELETE: (id: number) => `/historical-sites/sites/${id}/`,
-    BULK_MEDIA: (id: number) => `/historical-sites/sites/${id}/bulk_media_upload/`,
+    UPLOAD_MEDIA: (id: number) => `/historical-sites/sites/${id}/upload_media/`,
   },
   MEDIA: {
     LIST: '/historical-sites/media/',

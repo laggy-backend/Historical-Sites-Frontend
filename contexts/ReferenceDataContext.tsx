@@ -4,7 +4,7 @@
  * Follows the same pattern as AuthContext
  */
 
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect, useState, useCallback } from 'react';
 import { referenceDataApi, referenceHelpers } from '../services/referenceData';
 import { ReferenceData, City, Tag, Category, Governorate } from '../types/historicalSites';
 import { logger } from '../utils/logger';
@@ -80,50 +80,50 @@ export const ReferenceDataProvider: React.FC<ReferenceDataProviderProps> = ({ ch
   };
 
   // Helper functions
-  const getCityName = (id: number): string => {
+  const getCityName = useCallback((id: number): string => {
     if (!data) return 'Unknown City';
     const city = referenceHelpers.findCityById(data.cities, id);
     return city?.name_en || 'Unknown City';
-  };
+  }, [data]);
 
-  const getCategoryName = (id: number): string => {
+  const getCategoryName = useCallback((id: number): string => {
     if (!data) return 'Unknown Category';
     const category = data.categories.find(cat => cat.id === id);
     return category ? referenceHelpers.formatSlugForDisplay(category.slug_en) : 'Unknown Category';
-  };
+  }, [data]);
 
-  const getTagName = (id: number): string => {
+  const getTagName = useCallback((id: number): string => {
     if (!data) return 'Unknown Tag';
     const tag = data.tags.find(t => t.id === id);
     return tag ? referenceHelpers.formatSlugForDisplay(tag.slug_en) : 'Unknown Tag';
-  };
+  }, [data]);
 
-  const getGovernorate = (id: number): Governorate | undefined => {
+  const getGovernorate = useCallback((id: number): Governorate | undefined => {
     if (!data) return undefined;
     return data.governorates.find(gov => gov.id === id);
-  };
+  }, [data]);
 
-  const findCityByName = (name: string): City | undefined => {
+  const findCityByName = useCallback((name: string): City | undefined => {
     if (!data) return undefined;
     return referenceHelpers.findCityByName(data.cities, name);
-  };
+  }, [data]);
 
-  const findTagBySlug = (slug: string): Tag | undefined => {
+  const findTagBySlug = useCallback((slug: string): Tag | undefined => {
     if (!data) return undefined;
     return referenceHelpers.findTagBySlug(data.tags, slug);
-  };
+  }, [data]);
 
-  const findCategoryBySlug = (slug: string): Category | undefined => {
+  const findCategoryBySlug = useCallback((slug: string): Category | undefined => {
     if (!data) return undefined;
     return referenceHelpers.findCategoryBySlug(data.categories, slug);
-  };
+  }, [data]);
 
   // Refresh functions
-  const refreshData = async (): Promise<void> => {
+  const refreshData = useCallback(async (): Promise<void> => {
     await loadReferenceData();
-  };
+  }, []);
 
-  const refreshCities = async (): Promise<void> => {
+  const refreshCities = useCallback(async (): Promise<void> => {
     if (!data) return;
 
     try {
@@ -136,9 +136,9 @@ export const ReferenceDataProvider: React.FC<ReferenceDataProviderProps> = ({ ch
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
-  };
+  }, [data]);
 
-  const refreshTags = async (): Promise<void> => {
+  const refreshTags = useCallback(async (): Promise<void> => {
     if (!data) return;
 
     try {
@@ -151,9 +151,9 @@ export const ReferenceDataProvider: React.FC<ReferenceDataProviderProps> = ({ ch
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
-  };
+  }, [data]);
 
-  const refreshCategories = async (): Promise<void> => {
+  const refreshCategories = useCallback(async (): Promise<void> => {
     if (!data) return;
 
     try {
@@ -166,7 +166,7 @@ export const ReferenceDataProvider: React.FC<ReferenceDataProviderProps> = ({ ch
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
-  };
+  }, [data]);
 
   // Load data only when authentication is ready and user is authenticated
   useEffect(() => {

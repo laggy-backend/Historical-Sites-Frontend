@@ -5,7 +5,7 @@
  */
 
 import { StatusBar } from 'expo-status-bar';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Text,
   View,
@@ -35,6 +35,7 @@ import { historicalSitesApi, siteHelpers } from '../../../services/historicalSit
 import { HistoricalSite } from '../../../types/historicalSites';
 import { AxiosError } from 'axios';
 import { apiHelpers } from '../../../services/api';
+import { canEditSite as checkCanEditSite, canDeleteSite as checkCanDeleteSite } from '../../../utils/permissions';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -171,7 +172,7 @@ export default function SiteDetail() {
     },
     coordinatesText: {
       ...createTypographyStyle(theme, 'body'),
-      color: theme.colors.primary,
+      color: theme.colors.textPrimary,
       fontWeight: theme.fontWeight.medium,
     },
     mapContainer: {
@@ -229,10 +230,13 @@ export default function SiteDetail() {
   }))(theme);
 
   useEffect(() => {
-    loadSiteDetails();
-  }, [siteId]);
+    if (siteId && !isNaN(siteId)) {
+      loadSiteDetails();
+    }
+  }, [siteId, loadSiteDetails]);
 
-  const loadSiteDetails = async () => {
+
+  const loadSiteDetails = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -258,7 +262,7 @@ export default function SiteDetail() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [siteId]);
 
   const handleBack = () => {
     // If coming from site creation, always go to explore
@@ -329,15 +333,15 @@ export default function SiteDetail() {
     Linking.openURL(url);
   };
 
-  const canEditSite = () => {
+  const userCanEdit = useMemo(() => {
     if (!site || !user) return false;
-    return siteHelpers.canEditSite(site, user.id, user.role);
-  };
+    return checkCanEditSite(site.user, user.id, user.role);
+  }, [site, user]);
 
-  const canDeleteSite = () => {
+  const userCanDelete = useMemo(() => {
     if (!site || !user) return false;
-    return siteHelpers.canDeleteSite(site, user.id, user.role);
-  };
+    return checkCanDeleteSite(site.user, user.id, user.role);
+  }, [site, user]);
 
   const renderImageGallery = () => {
     if (!site?.media_files.length) {
@@ -449,12 +453,12 @@ export default function SiteDetail() {
         </TouchableOpacity>
 
         <View style={styles.actionButtons}>
-          {canEditSite() && (
+          {userCanEdit && (
             <TouchableOpacity style={styles.actionButton} onPress={handleEdit}>
               <Ionicons name="create-outline" size={24} color={theme.colors.textPrimary} />
             </TouchableOpacity>
           )}
-          {canDeleteSite() && (
+          {userCanDelete && (
             <TouchableOpacity style={styles.actionButton} onPress={handleDelete}>
               <Ionicons name="trash-outline" size={24} color={theme.colors.error} />
             </TouchableOpacity>
@@ -492,11 +496,11 @@ export default function SiteDetail() {
 
             {/* Open in Maps */}
             <TouchableOpacity style={styles.coordinatesButton} onPress={handleOpenInMaps}>
-              <Ionicons name="map-outline" size={20} color={theme.colors.primary} />
+              <Ionicons name="map-outline" size={20} color={theme.colors.textPrimary} />
               <Text style={styles.coordinatesText}>
                 Open in Maps
               </Text>
-              <Ionicons name="open-outline" size={16} color={theme.colors.primary} />
+              <Ionicons name="open-outline" size={16} color={theme.colors.textPrimary} />
             </TouchableOpacity>
 
             {/* Date Added */}
