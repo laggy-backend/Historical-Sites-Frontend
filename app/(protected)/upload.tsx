@@ -586,12 +586,61 @@ export default function Upload() {
   };
 
   const fillDummyData = () => {
-    updateFormData({
-      name_en: 'Ancient Castle of Damascus',
-      name_ar: 'قلعة دمشق القديمة',
-      description_en: 'A magnificent medieval fortress that has stood for over 800 years, representing the architectural prowess of the Ayyubid dynasty. This historical monument has witnessed countless battles and served as a symbol of resistance throughout various periods of history.',
-      description_ar: 'قلعة رائعة من العصور الوسطى صمدت لأكثر من 800 عام، وتمثل البراعة المعمارية للدولة الأيوبية. شهد هذا النصب التاريخي معارك لا تحصى وكان رمزاً للمقاومة عبر فترات مختلفة من التاريخ.'
-    });
+    const dummyDataSets = [
+      {
+        name_en: 'Kuwait Towers',
+        name_ar: 'أبراج الكويت',
+        description_en: 'Iconic towers built in 1979 that have become the symbol of modern Kuwait. These architectural marvels feature distinctive blue-green spheres and serve as water reservoirs while offering panoramic views of Kuwait City and the Arabian Gulf.',
+        description_ar: 'أبراج مميزة بُنيت عام 1979 وأصبحت رمزاً للكويت الحديثة. تتميز هذه المعجزات المعمارية بكراتها الزرقاء والخضراء المميزة وتعمل كخزانات مياه بينما توفر مناظر بانورامية لمدينة الكويت والخليج العربي.'
+      },
+      {
+        name_en: 'Grand Mosque',
+        name_ar: 'المسجد الكبير',
+        description_en: 'The largest mosque in Kuwait, completed in 1986, featuring stunning Islamic architecture with intricate geometric patterns, beautiful calligraphy, and a magnificent central dome. This spiritual landmark can accommodate over 10,000 worshippers.',
+        description_ar: 'أكبر مسجد في الكويت، اكتمل بناؤه عام 1986، ويتميز بعمارة إسلامية مذهلة مع أنماط هندسية معقدة وخط جميل وقبة مركزية رائعة. يمكن لهذا المعلم الروحي أن يستوعب أكثر من 10000 مصلٍ.'
+      },
+      {
+        name_en: 'Seif Palace',
+        name_ar: 'قصر السيف',
+        description_en: 'The official residence of the Emir of Kuwait, featuring traditional Islamic architecture with blue-tiled clock tower. Built in 1896 and renovated multiple times, this palace represents the political heart of Kuwait and showcases beautiful Kuwaiti craftsmanship.',
+        description_ar: 'المقر الرسمي لأمير الكويت، ويتميز بالعمارة الإسلامية التقليدية مع برج ساعة مكسو بالبلاط الأزرق. بُني عام 1896 ورُمم عدة مرات، ويمثل هذا القصر القلب السياسي للكويت ويعرض الحرفية الكويتية الجميلة.'
+      },
+      {
+        name_en: 'Liberation Tower',
+        name_ar: 'برج التحرير',
+        description_en: 'A telecommunications tower built to commemorate Kuwait\'s liberation from Iraqi occupation in 1991. Standing at 372 meters tall, it was once the tallest structure in Kuwait and serves as a symbol of freedom and resilience.',
+        description_ar: 'برج اتصالات بُني لإحياء ذكرى تحرير الكويت من الاحتلال العراقي عام 1991. يبلغ ارتفاعه 372 متراً، وكان ذات يوم أطول مبنى في الكويت ويعتبر رمزاً للحرية والصمود.'
+      },
+      {
+        name_en: 'Souq Al-Mubarakiya',
+        name_ar: 'سوق المباركية',
+        description_en: 'One of the oldest markets in Kuwait, dating back over 200 years. This traditional bazaar offers a glimpse into Kuwait\'s trading heritage with its narrow alleys, traditional architecture, and vendors selling spices, textiles, and authentic Kuwaiti goods.',
+        description_ar: 'واحد من أقدم الأسواق في الكويت، يعود تاريخه إلى أكثر من 200 عام. يوفر هذا البازار التقليدي لمحة عن تراث الكويت التجاري بأزقته الضيقة وعمارته التقليدية والباعة الذين يبيعون التوابل والمنسوجات والسلع الكويتية الأصيلة.'
+      },
+      {
+        name_en: 'Red Fort',
+        name_ar: 'القلعة الحمراء',
+        description_en: 'A historic fort built in 1920 as part of Kuwait\'s old city wall defense system. This red-brick structure served as a watchtower and represents the architectural heritage of early 20th century Kuwait during the pearl diving era.',
+        description_ar: 'قلعة تاريخية بُنيت عام 1920 كجزء من نظام دفاع سور مدينة الكويت القديمة. خدم هذا المبنى المصنوع من الطوب الأحمر كبرج مراقبة ويمثل التراث المعماري للكويت في أوائل القرن العشرين خلال عصر الغوص للبحث عن اللؤلؤ.'
+      },
+      {
+        name_en: 'Failaka Island Archaeological Site',
+        name_ar: 'موقع جزيرة فيلكا الأثري',
+        description_en: 'Ancient ruins on Failaka Island dating back to the Bronze Age and Hellenistic period. This archaeological treasure includes Greek temples, ancient settlements, and artifacts that reveal Kuwait\'s connection to ancient civilizations and maritime trade routes.',
+        description_ar: 'أطلال قديمة في جزيرة فيلكا تعود إلى العصر البرونزي والفترة الهلنستية. يشمل هذا الكنز الأثري معابد يونانية ومستوطنات قديمة وقطع أثرية تكشف عن صلة الكويت بالحضارات القديمة وطرق التجارة البحرية.'
+      },
+      {
+        name_en: 'Kuwait National Museum',
+        name_ar: 'المتحف الوطني الكويتي',
+        description_en: 'Built in 1983, this museum houses Kuwait\'s cultural heritage including archaeological artifacts, traditional boats, Bedouin tents, and Islamic art. The building itself represents modern Kuwaiti architecture and serves as a guardian of the nation\'s history.',
+        description_ar: 'بُني عام 1983، ويضم هذا المتحف التراث الثقافي للكويت بما في ذلك القطع الأثرية والقوارب التقليدية وخيام البدو والفن الإسلامي. يمثل المبنى نفسه العمارة الكويتية الحديثة ويعمل كحارس لتاريخ الأمة.'
+      }
+    ];
+
+    const randomIndex = Math.floor(Math.random() * dummyDataSets.length);
+    const selectedData = dummyDataSets[randomIndex];
+
+    updateFormData(selectedData);
   };
 
   const renderBasicInfoStep = () => (

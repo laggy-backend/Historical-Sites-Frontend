@@ -995,8 +995,8 @@ export default function EditSite() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Only show "Set as Thumbnail" for images that aren't already the thumbnail */}
-                  {isImage && !media.is_thumbnail && (
+                  {/* Hidden: Set as Thumbnail button */}
+                  {false && isImage && !media.is_thumbnail && (
                     <TouchableOpacity
                       style={styles.setThumbnailButton}
                       onPress={() => handleSetThumbnail(media.id, index)}
