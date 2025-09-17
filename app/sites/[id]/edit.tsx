@@ -22,7 +22,6 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  createButtonStyle,
   createButtonTextStyle,
   createInputErrorStyle,
   createInputLabelStyle,
@@ -43,7 +42,7 @@ import { LocationPicker } from '../../../components/maps/LocationPicker';
 import { CityFilter } from '../../../components/filters/CityFilter';
 import { CategoryFilter } from '../../../components/filters/CategoryFilter';
 import { TagFilter } from '../../../components/filters/TagFilter';
-import { MediaPicker, MediaItem } from '../../../components/media/MediaPicker';
+import { MediaPickerEdit, MediaItemEdit } from '../../../components/media/MediaPickerEdit';
 import { UpdateSiteData, Coordinate, SiteFormErrors, HistoricalSite } from '../../../types/historicalSites';
 import {
   validateEnglishName,
@@ -65,8 +64,8 @@ interface FormData {
   selectedCity?: string;
   selectedCategories: string[];
   selectedTags: string[];
-  mediaItems: MediaItem[];
-  existingMedia: any[];
+  mediaItems: MediaItemEdit[]; // New media items to be added (no thumbnail selection)
+  existingMedia: any[]; // Existing media files from the site
 }
 
 export default function EditSite() {
@@ -290,9 +289,10 @@ export default function EditSite() {
       position: 'absolute',
       top: theme.spacing.xs,
       right: theme.spacing.xs,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.error,
       borderRadius: 12,
       padding: theme.spacing.xs,
+      zIndex: 10,
     },
     setThumbnailButton: {
       marginTop: theme.spacing.xs,
@@ -464,9 +464,12 @@ export default function EditSite() {
 
   // Media management functions
   const handleDeleteExistingMedia = async (mediaId: number, index: number) => {
+    const mediaItem = formData.existingMedia[index];
+    const isCurrentThumbnail = mediaItem.is_thumbnail;
+
     Alert.alert(
       'Delete Media',
-      'Are you sure you want to delete this media file? This action cannot be undone.',
+      `Are you sure you want to delete this media file?${isCurrentThumbnail ? ' This is the current thumbnail.' : ''} This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -483,11 +486,21 @@ export default function EditSite() {
                 const updatedMedia = [...formData.existingMedia];
                 updatedMedia.splice(index, 1);
                 updateFormData({ existingMedia: updatedMedia });
-                Alert.alert('Success', 'Media deleted successfully');
+
+                if (isCurrentThumbnail && updatedMedia.length > 0) {
+                  Alert.alert(
+                    'Thumbnail Deleted',
+                    'The thumbnail was deleted. Please set a new thumbnail from the remaining images.',
+                    [{ text: 'OK' }]
+                  );
+                } else {
+                  Alert.alert('Success', 'Media deleted successfully');
+                }
               } else {
-                Alert.alert('Error', 'Failed to delete media');
+                Alert.alert('Error', response.message || 'Failed to delete media');
               }
             } catch (error) {
+              console.error('Delete media error:', error);
               Alert.alert('Error', 'Failed to delete media');
             } finally {
               setIsLoading(false);
@@ -499,6 +512,14 @@ export default function EditSite() {
   };
 
   const handleSetThumbnail = async (mediaId: number, index: number) => {
+    const mediaItem = formData.existingMedia[index];
+
+    // Only images can be thumbnails
+    if (!mediaItem.file_type || !mediaItem.file_type.startsWith('image/')) {
+      Alert.alert('Invalid Selection', 'Only images can be set as thumbnails.');
+      return;
+    }
+
     try {
       setIsLoading(true);
       // Call API to set this media as thumbnail
@@ -513,9 +534,10 @@ export default function EditSite() {
         updateFormData({ existingMedia: updatedMedia });
         Alert.alert('Success', 'Thumbnail updated successfully');
       } else {
-        Alert.alert('Error', 'Failed to update thumbnail');
+        Alert.alert('Error', response.message || 'Failed to update thumbnail');
       }
     } catch (error) {
+      console.error('Set thumbnail error:', error);
       Alert.alert('Error', 'Failed to update thumbnail');
     } finally {
       setIsLoading(false);
@@ -590,7 +612,13 @@ export default function EditSite() {
       // Step 2: Upload new media files if any
       if (formData.mediaItems.length > 0) {
         try {
-          const mediaResponse = await historicalSitesApi.uploadSiteMedia(siteId, formData.mediaItems);
+          // Convert MediaItemEdit to MediaItem format for upload
+          const mediaItemsForUpload = formData.mediaItems.map(item => ({
+            ...item,
+            is_thumbnail: false // New media in edit mode should never be thumbnails
+          })) as any[];
+
+          const mediaResponse = await historicalSitesApi.uploadSiteMedia(siteId, mediaItemsForUpload);
 
           if (!mediaResponse.success) {
             Alert.alert(
@@ -600,6 +628,7 @@ export default function EditSite() {
             );
           }
         } catch (mediaError) {
+          console.error('Media upload error:', mediaError);
           Alert.alert(
             'Partial Success',
             'Site was updated but media upload failed.',
@@ -885,80 +914,111 @@ export default function EditSite() {
     <View style={styles.formSection}>
       <Text style={styles.stepTitle}>Media Management</Text>
       <Text style={styles.stepDescription}>
-        Add new photos and videos or manage existing media files.
+        Manage existing media files and add new ones to this historical site.
       </Text>
 
+      {/* Existing Media Section */}
       {formData.existingMedia.length > 0 && (
         <View style={styles.inputContainer}>
           <Text style={createInputLabelStyle(theme, false, isLoading)}>
-            Existing Media ({formData.existingMedia.length} files)
+            Current Media ({formData.existingMedia.length} files)
           </Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             style={{ marginTop: theme.spacing.sm }}
           >
-            {formData.existingMedia.map((media, index) => (
-              <View key={media.id} style={styles.existingMediaItem}>
-                <View style={styles.existingMediaImageContainer}>
-                  {media.file_url && (
-                    <Image
-                      source={{ uri: media.file_url }}
-                      style={styles.existingMediaImage}
-                      contentFit="cover"
-                    />
-                  )}
-                  {media.is_thumbnail && (
-                    <View style={styles.thumbnailBadge}>
-                      <Text style={styles.thumbnailBadgeText}>Thumbnail</Text>
-                    </View>
+            {formData.existingMedia.map((media, index) => {
+              // Debug: Log the media object to see its structure
+              console.log('Media object:', media);
+
+              // Try different possible field names for file type
+              const fileType = media.file_type || media.type || media.mime_type || '';
+              const fileUrl = media.file_url || media.url || media.file || '';
+
+              const isImage = fileType.startsWith('image/') ||
+                             fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+              const isVideo = fileType.startsWith('video/') ||
+                             fileUrl.match(/\.(mp4|mov|avi|wmv|flv|webm|mkv)$/i);
+
+              return (
+                <View key={media.id} style={styles.existingMediaItem}>
+                  <View style={styles.existingMediaImageContainer}>
+                    {fileUrl ? (
+                      <>
+                        {isImage ? (
+                          <Image
+                            source={{ uri: fileUrl }}
+                            style={styles.existingMediaImage}
+                            contentFit="cover"
+                            onError={(error) => {
+                              console.log('Image load error:', error, 'URL:', fileUrl);
+                            }}
+                          />
+                        ) : isVideo ? (
+                          <View style={[styles.existingMediaImage, { backgroundColor: 'rgba(0,0,0,0.8)', alignItems: 'center', justifyContent: 'center' }]}>
+                            <Ionicons name="videocam" size={32} color="white" />
+                            <Text style={{ color: 'white', fontSize: 10, textAlign: 'center', marginTop: 4 }}>
+                              Video
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.existingMediaImage, { backgroundColor: 'rgba(128,128,128,0.8)', alignItems: 'center', justifyContent: 'center' }]}>
+                            <Ionicons name="document" size={32} color="white" />
+                            <Text style={{ color: 'white', fontSize: 10, textAlign: 'center', marginTop: 4 }}>
+                              File
+                            </Text>
+                          </View>
+                        )}
+                      </>
+                    ) : (
+                      <View style={[styles.existingMediaImage, { backgroundColor: 'rgba(200,200,200,0.8)', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Ionicons name="image-outline" size={32} color="gray" />
+                        <Text style={{ color: 'gray', fontSize: 10, textAlign: 'center', marginTop: 4 }}>
+                          No Image
+                        </Text>
+                      </View>
+                    )}
+
+                    {media.is_thumbnail && (
+                      <View style={styles.thumbnailBadge}>
+                        <Text style={styles.thumbnailBadgeText}>THUMBNAIL</Text>
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      style={styles.deleteMediaButton}
+                      onPress={() => handleDeleteExistingMedia(media.id, index)}
+                      disabled={isLoading}
+                    >
+                      <Ionicons name="trash" size={16} color="white" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Only show "Set as Thumbnail" for images that aren't already the thumbnail */}
+                  {isImage && !media.is_thumbnail && (
+                    <TouchableOpacity
+                      style={styles.setThumbnailButton}
+                      onPress={() => handleSetThumbnail(media.id, index)}
+                      disabled={isLoading}
+                    >
+                      <Text style={styles.setThumbnailText}>Set as Thumbnail</Text>
+                    </TouchableOpacity>
                   )}
                 </View>
-                <TouchableOpacity
-                  style={styles.deleteMediaButton}
-                  onPress={() => handleDeleteExistingMedia(media.id, index)}
-                  disabled={isLoading}
-                >
-                  <Ionicons name="trash" size={16} color={theme.colors.error} />
-                </TouchableOpacity>
-                {!media.is_thumbnail && (
-                  <TouchableOpacity
-                    style={styles.setThumbnailButton}
-                    onPress={() => handleSetThumbnail(media.id, index)}
-                    disabled={isLoading}
-                  >
-                    <Text style={styles.setThumbnailText}>Set as Thumbnail</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
+              );
+            })}
           </ScrollView>
         </View>
       )}
 
+      {/* Add New Media Section - Uses Edit-specific MediaPicker */}
       <View style={styles.inputContainer}>
-        <Text style={createInputLabelStyle(theme, !!errors.mediaItems, isLoading)}>
-          Add New Media Files (Optional)
-        </Text>
-        <MediaPicker
+        <MediaPickerEdit
           mediaItems={formData.mediaItems}
-          onMediaChange={(items) => {
-            // Check if site already has a thumbnail
-            const hasThumbnail = formData.existingMedia.some(media => media.is_thumbnail);
-
-            // If site already has a thumbnail, don't set any new media as thumbnail
-            if (hasThumbnail) {
-              const itemsWithoutThumbnail = items.map(item => ({
-                ...item,
-                is_thumbnail: false
-              }));
-              updateFormData({ mediaItems: itemsWithoutThumbnail });
-            } else {
-              updateFormData({ mediaItems: items });
-            }
-          }}
+          onMediaChange={(items) => updateFormData({ mediaItems: items })}
           disabled={isLoading}
-          maxItems={10}
+          maxItems={10 - formData.existingMedia.length} // Adjust based on existing media
         />
         {errors.mediaItems && <Text style={createInputErrorStyle(theme)}>{errors.mediaItems}</Text>}
       </View>
@@ -1013,23 +1073,31 @@ export default function EditSite() {
       )}
 
       <View style={styles.reviewItem}>
-        <Text style={styles.reviewLabel}>Media Changes</Text>
+        <Text style={styles.reviewLabel}>Media Summary</Text>
         <Text style={styles.reviewValue}>
-          {formData.mediaItems.length === 0
-            ? 'No new media files to add'
-            : (() => {
-                const images = formData.mediaItems.filter(item => item.type.startsWith('image/')).length;
-                const videos = formData.mediaItems.filter(item => item.type.startsWith('video/')).length;
-                const parts = [];
-                if (images > 0) parts.push(`${images} new photo${images !== 1 ? 's' : ''}`);
-                if (videos > 0) parts.push(`${videos} new video${videos !== 1 ? 's' : ''}`);
-                return parts.join(' and ') + ' to add';
-              })()
-          }
+          {formData.existingMedia.length > 0 && (
+            `${formData.existingMedia.length} existing media file${formData.existingMedia.length !== 1 ? 's' : ''}`
+          )}
         </Text>
-        {formData.existingMedia.length > 0 && (
+        {formData.mediaItems.length > 0 ? (
           <Text style={styles.reviewValueSecondary}>
-            {formData.existingMedia.length} existing media file{formData.existingMedia.length !== 1 ? 's' : ''} will remain
+            {(() => {
+              const images = formData.mediaItems.filter(item => item.type.startsWith('image/')).length;
+              const videos = formData.mediaItems.filter(item => item.type.startsWith('video/')).length;
+              const parts = [];
+              if (images > 0) parts.push(`${images} new photo${images !== 1 ? 's' : ''}`);
+              if (videos > 0) parts.push(`${videos} new video${videos !== 1 ? 's' : ''}`);
+              return '+ ' + parts.join(' and ') + ' to add';
+            })()}
+          </Text>
+        ) : (
+          <Text style={styles.reviewValueSecondary}>
+            No new media files to add
+          </Text>
+        )}
+        {formData.existingMedia.some(media => media.is_thumbnail) && (
+          <Text style={styles.reviewValueSecondary}>
+            Current thumbnail: {formData.existingMedia.find(media => media.is_thumbnail)?.title || 'Untitled'}
           </Text>
         )}
       </View>

@@ -216,6 +216,43 @@ export const historicalSitesApi = {
     } catch (error) {
       throw error;
     }
+  },
+
+  /**
+   * Delete a media file (soft delete)
+   */
+  deleteMediaFile: async (id: number): Promise<ApiResponse<void>> => {
+    try {
+      const response = await apiClient.delete(API_ENDPOINTS.MEDIA.DELETE(id));
+
+      // Handle 204 No Content responses which might not have response.data
+      if (response.status === 204) {
+        return { success: true, message: 'Media deleted successfully', data: undefined };
+      }
+
+      return response.data;
+    } catch (error) {
+      // Check if axios treated a successful 204 as an error
+      if (error instanceof AxiosError && error.response?.status === 204) {
+        return { success: true, message: 'Media deleted successfully', data: undefined };
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Update media file metadata (cannot change the file itself)
+   */
+  updateMedia: async (
+    id: number,
+    updates: { title?: string; caption?: string; is_thumbnail?: boolean }
+  ): Promise<ApiResponse<MediaFile>> => {
+    try {
+      const response = await apiClient.patch(API_ENDPOINTS.MEDIA.UPDATE(id), updates);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 
