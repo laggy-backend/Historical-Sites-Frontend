@@ -9,6 +9,7 @@ import { API_BASE_URL, API_ENDPOINTS, API_TIMEOUT, HTTP_STATUS, STORAGE_KEYS } f
 import { ApiError } from '../types/api';
 import { logger } from '../utils/logger';
 import { retryManager, DEFAULT_RETRY_CONFIG } from '../utils/retry';
+import { authEvents } from './authEvents';
 
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
@@ -103,6 +104,12 @@ apiClient.interceptors.response.use(
 
         if (!refreshToken) {
           logger.warn('auth', 'No refresh token available for token refresh');
+
+          // Clear any stale tokens and force logout
+          await SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+          await SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
+          authEvents.forceLogout('No valid refresh token available');
+
           return Promise.reject(error);
         }
 
@@ -134,6 +141,9 @@ apiClient.interceptors.response.use(
 
         logger.authSuccess('Token refresh');
 
+        // Notify AuthContext about successful token refresh
+        authEvents.tokenRefreshed({ access, refresh });
+
         // Retry the original request with new token
         originalRequest.headers.Authorization = `Bearer ${access}`;
 
@@ -150,6 +160,10 @@ apiClient.interceptors.response.use(
         retryManager.resetRetryCount(requestKey);
 
         logger.authFailure('Token refresh', (refreshError as Error).message);
+
+        // Notify AuthContext to immediately clear user state and redirect to login
+        authEvents.forceLogout('Token refresh failed - session expired');
+
         return Promise.reject(refreshError);
       }
     }

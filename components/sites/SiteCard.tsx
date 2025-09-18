@@ -15,11 +15,12 @@ import {
   useTheme
 } from '../../styles';
 import { HistoricalSite } from '../../types/historicalSites';
+import { VideoPreview } from '../media/VideoPreview';
+import { isVideoFile } from '../../utils/mediaUtils';
 import { siteHelpers } from '../../services/historicalSites';
 import { useReferenceData } from '../../contexts/ReferenceDataContext';
 
-const { width: screenWidth } = Dimensions.get('window');
-const CARD_MARGIN = 16;
+const { width: screenWidth } = Dimensions.get('window');const CARD_MARGIN = 16;
 const CARD_WIDTH = screenWidth - (CARD_MARGIN * 2);
 
 interface SiteCardProps {
@@ -31,8 +32,8 @@ export const SiteCard: React.FC<SiteCardProps> = ({ site, onPress }) => {
   const { theme } = useTheme();
   const { getCityName } = useReferenceData();
 
-  const thumbnailImage = siteHelpers.getThumbnailImage(site);
-
+  const thumbnailMedia = siteHelpers.getThumbnailImage(site);
+  const isVideo = thumbnailMedia ? isVideoFile(thumbnailMedia) : false;
   const styles = createStyles((theme) => ({
     container: {
       backgroundColor: theme.colors.surface,
@@ -130,14 +131,25 @@ export const SiteCard: React.FC<SiteCardProps> = ({ site, onPress }) => {
     >
       {/* Image */}
       <View style={styles.imageContainer}>
-        {thumbnailImage ? (
-          <Image
-            source={{ uri: thumbnailImage.file }}
-            style={styles.image}
-            contentFit="cover"
-            transition={300}
-            placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
-          />
+        {thumbnailMedia ? (
+          isVideo ? (
+            <VideoPreview
+              uri={thumbnailMedia.file}
+              width={CARD_WIDTH}
+              height={200}
+              showControls={false}
+              autoPlay={false}
+              thumbnailOnly={true}
+            />
+          ) : (
+            <Image
+              source={{ uri: thumbnailMedia.file }}
+              style={styles.image}
+              contentFit="cover"
+              transition={300}
+              placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+            />
+          )
         ) : (
           <View style={styles.placeholderContainer}>
             <Ionicons

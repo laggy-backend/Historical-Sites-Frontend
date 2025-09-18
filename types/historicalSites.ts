@@ -44,6 +44,7 @@ export interface Category {
 export interface MediaFile {
   id: number;
   file: string;
+  file_type?: string;
   title?: string;
   caption?: string;
   historical_site: number;

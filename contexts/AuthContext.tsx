@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { API_ENDPOINTS, STORAGE_KEYS } from '../config';
 import apiClient, { apiHelpers } from '../services/api';
+import { authEvents } from '../services/authEvents';
 import { AuthResult, AuthResponse, ApiError } from '../types/api';
 import { logger } from '../utils/logger';
 
@@ -254,6 +255,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     checkAuthStatus();
+  }, []);
+
+  // Set up authentication event listeners
+  useEffect(() => {
+    const unsubscribeLogout = authEvents.on('FORCE_LOGOUT', (data) => {
+      logger.warn('auth', 'Force logout triggered', { reason: data?.reason });
+      clearAuthData();
+    });
+
+    const unsubscribeTokenRefresh = authEvents.on('TOKEN_REFRESHED', (tokens) => {
+      logger.debug('auth', 'Token refreshed via API client');
+      setAuthState(prev => ({
+        ...prev,
+        accessToken: tokens.access,
+        refreshToken: tokens.refresh,
+      }));
+    });
+
+    // Cleanup listeners on unmount
+    return () => {
+      unsubscribeLogout();
+      unsubscribeTokenRefresh();
+    };
   }, []);
 
   return (

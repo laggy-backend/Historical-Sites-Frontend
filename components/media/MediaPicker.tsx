@@ -27,6 +27,8 @@ import {
   rowCenter,
   useTheme
 } from '../../styles';
+import { compressMedia, getFileSize, getCompressionSummary, CompressionResult } from '../../utils/mediaCompression';
+import { VideoPreview } from './VideoPreview';
 
 export interface MediaItem {
   uri: string;
@@ -41,7 +43,6 @@ export interface MediaItem {
   // File object for upload (created from uri)
   file?: any;
 }
-
 interface MediaPickerProps {
   mediaItems: MediaItem[];
   onMediaChange: (items: MediaItem[]) => void;
@@ -57,6 +58,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
 }) => {
   const { theme } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState<string>('');
 
   const styles = createStyles((theme) => ({
     container: {
@@ -127,6 +129,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
       height: 24,
       alignItems: 'center',
       justifyContent: 'center',
+      zIndex: 10, // Ensure it appears above the media overlay
     },
     thumbnailIndicator: {
       position: 'absolute',
@@ -136,6 +139,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
       borderRadius: theme.borderRadius.sm,
       paddingHorizontal: theme.spacing.xs,
       paddingVertical: 2,
+      zIndex: 10, // Ensure it appears above the media overlay
     },
     thumbnailText: {
       ...createTypographyStyle(theme, 'caption'),
@@ -269,8 +273,10 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
   const processSelectedMedia = async (assets: ImagePicker.ImagePickerAsset[]) => {
     const validItems: MediaItem[] = [];
     const invalidItems: string[] = [];
+    const compressionResults: CompressionResult[] = [];
 
     for (const [index, asset] of assets.entries()) {
+      setCompressionProgress(`Processing ${index + 1}/${assets.length}...`);
       const isImage = asset.type === 'image';
       const maxSize = isImage ? 10 * 1024 * 1024 : 100 * 1024 * 1024; // 10MB for images, 100MB for videos
 
@@ -292,20 +298,61 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
         continue;
       }
 
-      // Estimate file size if not provided (rough estimate based on dimensions and type)
+      // Get actual or estimated file size
       let estimatedSize = 0;
       if (asset.fileSize) {
         estimatedSize = asset.fileSize;
-      } else if (asset.width && asset.height) {
-        // Rough size estimation
-        estimatedSize = isImage
-          ? (asset.width * asset.height * 3) // RGB
-          : (asset.width * asset.height * 1.5 * (asset.duration || 10)); // Video estimation
+      } else {
+        // Try to get actual file size first
+        const actualSize = await getFileSize(asset.uri);
+        if (actualSize > 0) {
+          estimatedSize = actualSize;
+        } else if (asset.width && asset.height) {
+          // Fallback to rough size estimation
+          estimatedSize = isImage
+            ? (asset.width * asset.height * 3) // RGB
+            : (asset.width * asset.height * 1.5 * (asset.duration || 10)); // Video estimation
+        }
       }
 
-      if (estimatedSize > maxSize) {
+      // Compress media before validation (only for images)
+      let compressionResult;
+      if (isImage) {
+        setCompressionProgress(`Compressing ${fileName}...`);
+        compressionResult = await compressMedia(
+          asset.uri,
+          asset.mimeType || 'image/jpeg',
+          estimatedSize,
+          {
+            imageQuality: 0.8,
+            imageMaxWidth: 1920,
+            imageMaxHeight: 1080,
+            minimumFileSizeForCompress: 512 * 1024, // 512KB threshold
+          }
+        );
+      } else {
+        // Videos are not compressed, return as-is
+        compressionResult = {
+          uri: asset.uri,
+          originalSize: estimatedSize,
+          compressedSize: estimatedSize,
+          compressionRatio: 1,
+          success: true,
+        };
+      }
+
+      compressionResults.push(compressionResult);
+
+      // Use compressed URI and size for further processing
+      const finalUri = compressionResult.success ? compressionResult.uri : asset.uri;
+      const finalSize = compressionResult.success ? compressionResult.compressedSize : estimatedSize;
+
+      if (finalSize > maxSize) {
         const maxMB = isImage ? '10MB' : '100MB';
-        invalidItems.push(`${fileName} (estimated size exceeds ${maxMB} limit)`);
+        const compressionInfo = compressionResult.success
+          ? ` after compression (${getCompressionSummary(compressionResult)})`
+          : '';
+        invalidItems.push(`${fileName} (size exceeds ${maxMB} limit${compressionInfo})`);
         continue;
       }
 
@@ -367,21 +414,38 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
       }
 
       const fileObject = {
-        uri: asset.uri,
+        uri: finalUri,
         name: fileName,
         type: fileType
       };
 
       validItems.push({
-        uri: asset.uri,
+        uri: finalUri,
         name: fileName,
         type: fileType,
-        size: estimatedSize,
+        size: finalSize,
         width: asset.width,
         height: asset.height,
         is_thumbnail: mediaItems.length === 0 && index === 0 && isImage, // Only first image can be thumbnail
         file: fileObject
       });
+    }
+
+    setCompressionProgress('');
+
+    // Show compression summary (only for actually compressed images)
+    const successfulImageCompressions = compressionResults.filter(r => r.success && r.compressionRatio < 1);
+    if (successfulImageCompressions.length > 0) {
+      const totalOriginalSize = successfulImageCompressions.reduce((sum, r) => sum + r.originalSize, 0);
+      const totalCompressedSize = successfulImageCompressions.reduce((sum, r) => sum + r.compressedSize, 0);
+      const overallSavings = totalOriginalSize > 0 ? (1 - totalCompressedSize / totalOriginalSize) * 100 : 0;
+
+      if (overallSavings > 5) { // Only show if meaningful savings
+        Alert.alert(
+          'Compression Complete',
+          `${successfulImageCompressions.length} image(s) compressed with ${overallSavings.toFixed(1)}% total size reduction.`
+        );
+      }
     }
 
     if (invalidItems.length > 0) {
@@ -463,12 +527,14 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
                       transition={200}
                     />
                   ) : (
-                    <View style={styles.videoPreview}>
-                      <Ionicons name="videocam" size={32} color="white" />
-                      <Text style={styles.videoText} numberOfLines={2}>
-                        {item.name}
-                      </Text>
-                    </View>
+                    <VideoPreview
+                      uri={item.uri}
+                      width={100}
+                      height={100}
+                      showControls={false}
+                      autoPlay={false}
+                      thumbnailOnly={true}
+                    />
                   )}
 
                   {item.is_thumbnail && (
@@ -507,7 +573,16 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({
                 disabled={!canAddMore || isLoading}
               >
                 {isLoading ? (
-                  <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+                  <>
+                    <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+                    {compressionProgress ? (
+                      <Text style={[styles.addButtonText, { fontSize: 12 }]}>
+                        {compressionProgress}
+                      </Text>
+                    ) : (
+                      <Text style={styles.addButtonText}>Processing...</Text>
+                    )}
+                  </>
                 ) : (
                   <>
                     <Ionicons name="add" size={24} color={theme.colors.textSecondary} />

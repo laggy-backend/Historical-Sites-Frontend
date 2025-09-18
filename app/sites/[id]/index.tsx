@@ -36,9 +36,10 @@ import { HistoricalSite } from '../../../types/historicalSites';
 import { AxiosError } from 'axios';
 import { apiHelpers } from '../../../services/api';
 import { canEditSite as checkCanEditSite, canDeleteSite as checkCanDeleteSite } from '../../../utils/permissions';
+import { VideoPreview } from '../../../components/media/VideoPreview';
+import { isVideoFile } from '../../../utils/mediaUtils';
 
 const { width: screenWidth } = Dimensions.get('window');
-
 export default function SiteDetail() {
   const { theme } = useTheme();
   const { id, from } = useLocalSearchParams();
@@ -359,16 +360,29 @@ export default function SiteDetail() {
       );
     }
 
-    const currentImage = site.media_files[selectedImageIndex];
+    const currentMedia = site.media_files[selectedImageIndex];
+    const isVideo = isVideoFile(currentMedia);
 
     return (
       <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: currentImage.file }}
-          style={styles.image}
-          contentFit="cover"
-          transition={300}
-        />
+        {isVideo ? (
+          <VideoPreview
+            uri={currentMedia.file}
+            width={screenWidth}
+            height={240}
+            showControls={true}
+            autoPlay={false}
+            thumbnailOnly={false}
+            style={styles.image}
+          />
+        ) : (
+          <Image
+            source={{ uri: currentMedia.file }}
+            style={styles.image}
+            contentFit="cover"
+            transition={300}
+          />
+        )}
 
         {site.media_files.length > 1 && (
           <>
