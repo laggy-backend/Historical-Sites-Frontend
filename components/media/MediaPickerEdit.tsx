@@ -252,6 +252,21 @@ export const MediaPickerEdit: React.FC<MediaPickerEditProps> = ({
       // Generate a name from URI if not provided
       const fileName = asset.fileName || asset.uri.split('/').pop() || `${isImage ? 'image' : 'video'}_${Date.now()}`;
 
+      // Validate file type before processing
+      const extension = fileName.toLowerCase().split('.').pop() || '';
+      const supportedImageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+      const supportedVideoTypes = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'];
+
+      if (isImage && !supportedImageTypes.includes(extension)) {
+        invalidItems.push(`${fileName} (unsupported image format. Supported: ${supportedImageTypes.join(', ')})`);
+        continue;
+      }
+
+      if (!isImage && !supportedVideoTypes.includes(extension)) {
+        invalidItems.push(`${fileName} (unsupported video format. Supported: ${supportedVideoTypes.join(', ')})`);
+        continue;
+      }
+
       // Estimate file size if not provided
       let estimatedSize = 0;
       if (asset.fileSize) {
@@ -269,8 +284,61 @@ export const MediaPickerEdit: React.FC<MediaPickerEditProps> = ({
         continue;
       }
 
-      // Create file object for upload
-      const fileType = asset.mimeType || (isImage ? 'image/jpeg' : 'video/mp4');
+      // Create file object for upload - Better MIME type detection
+      let fileType = asset.mimeType;
+
+      if (!fileType) {
+        // Extract extension from filename
+        const extension = fileName.toLowerCase().split('.').pop() || '';
+
+        if (isImage) {
+          // Handle image MIME types
+          switch (extension) {
+            case 'jpg':
+            case 'jpeg':
+              fileType = 'image/jpeg';
+              break;
+            case 'png':
+              fileType = 'image/png';
+              break;
+            case 'gif':
+              fileType = 'image/gif';
+              break;
+            case 'webp':
+              fileType = 'image/webp';
+              break;
+            default:
+              fileType = 'image/jpeg'; // fallback for images
+          }
+        } else {
+          // Handle video MIME types
+          switch (extension) {
+            case 'mp4':
+              fileType = 'video/mp4';
+              break;
+            case 'avi':
+              fileType = 'video/x-msvideo';
+              break;
+            case 'mov':
+              fileType = 'video/quicktime';
+              break;
+            case 'wmv':
+              fileType = 'video/x-ms-wmv';
+              break;
+            case 'flv':
+              fileType = 'video/x-flv';
+              break;
+            case 'webm':
+              fileType = 'video/webm';
+              break;
+            case 'mkv':
+              fileType = 'video/x-matroska';
+              break;
+            default:
+              fileType = 'video/mp4'; // fallback for videos
+          }
+        }
+      }
 
       const fileObject = {
         uri: asset.uri,
