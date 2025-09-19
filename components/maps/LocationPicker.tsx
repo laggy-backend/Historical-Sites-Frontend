@@ -11,13 +11,13 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import {
   createButtonStyle,
-  createButtonTextStyle,
   createStyles,
   createTypographyStyle,
   rowCenter,
   useTheme
 } from '../../styles';
 import { Coordinate } from '../../types/historicalSites';
+import { logger } from '../../utils/logger';
 
 interface LocationPickerProps {
   coordinate?: Coordinate;
@@ -168,6 +168,10 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
 
       onLocationSelect(newCoordinate);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unable to get current location';
+      logger.error('general', 'Failed to get current location', {
+        error: errorMessage
+      });
       Alert.alert(
         'Location Error',
         'Unable to get your current location. Please try again.',

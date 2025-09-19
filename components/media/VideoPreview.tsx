@@ -9,6 +9,7 @@ import { View, TouchableOpacity, Text, ActivityIndicator, Linking, Alert } from 
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { createStyles, createTypographyStyle, useTheme } from '../../styles';
+import { logger } from '../../utils/logger';
 
 interface VideoPreviewProps {
   uri: string;
@@ -39,7 +40,7 @@ class VideoManager {
     if (this.activePlayer && this.activePlayer !== player) {
       try {
         this.activePlayer.pause();
-      } catch (e) {
+      } catch {
         // Ignore errors when pausing previous player
       }
     }
@@ -109,7 +110,10 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
         setPlayerReady(true);
         VideoManager.setActive(player, uri);
       } else if (status.status === 'error') {
-        console.warn('Video load failed:', uri, status.error?.message);
+        logger.warn('media', 'Video load failed', {
+          uri,
+          error: status.error?.message || 'Unknown video load error'
+        });
         setIsLoading(false);
         setHasError(true);
         setPlayerReady(false);
@@ -219,7 +223,11 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
         player.play();
       }
     } catch (error) {
-      console.warn('Video play/pause error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Video play/pause error';
+      logger.warn('media', 'Video play/pause operation failed', {
+        error: errorMessage,
+        uri
+      });
     }
   };
 
@@ -338,7 +346,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
       <VideoView
         style={styles.video}
         player={player}
-        fullscreenOptions={{ enabled: false }}
+        fullscreenOptions={{ enable: false }}
         allowsPictureInPicture={false}
         nativeControls={showControls}
         contentFit="cover"

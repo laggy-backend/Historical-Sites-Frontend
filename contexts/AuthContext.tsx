@@ -1,10 +1,10 @@
 import { AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { API_ENDPOINTS, STORAGE_KEYS } from '../config';
 import apiClient, { apiHelpers } from '../services/api';
 import { authEvents } from '../services/authEvents';
-import { AuthResult, AuthResponse, ApiError } from '../types/api';
+import { AuthResult, ApiError } from '../types/api';
 import { logger } from '../utils/logger';
 
 interface User {
@@ -26,7 +26,6 @@ interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
-  refreshAccessToken: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -52,7 +51,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshToken: null,
   });
 
-  const clearAuthData = async () => {
+  const clearAuthData = useCallback(async () => {
     await SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
     await SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
     setAuthState({
@@ -62,7 +61,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       accessToken: null,
       refreshToken: null,
     });
-  };
+  }, []);
 
   const login = async (email: string, password: string): Promise<AuthResult> => {
     try {
@@ -168,36 +167,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const refreshAccessToken = async (): Promise<boolean> => {
-    try {
-      const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
-      if (!refreshToken) return false;
 
-      // Use direct axios call to avoid interceptor loop
-      const response = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH, {
-        refresh: refreshToken
-      });
-
-      const tokens = response.data;
-
-      await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, tokens.access);
-      await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh);
-
-      setAuthState(prev => ({
-        ...prev,
-        accessToken: tokens.access,
-        refreshToken: tokens.refresh,
-      }));
-
-      return true;
-    } catch (error) {
-      logger.warn('auth', 'Token refresh failed', { error: (error as Error).message });
-      await clearAuthData();
-      return false;
-    }
-  };
-
-  const checkAuthStatus = async () => {
+  const checkAuthStatus = useCallback(async (retryCount = 0) => {
     try {
       const accessToken = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
       const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
@@ -208,12 +179,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       try {
-        // Verify token
-        await apiClient.post(API_ENDPOINTS.AUTH.VERIFY, {
-          token: accessToken
-        });
-
-        // Get user profile
+        // Get user profile - this will automatically handle token refresh via interceptor if needed
         const userResponse = await apiClient.get(API_ENDPOINTS.USERS.ME);
         const userData = userResponse.data;
 
@@ -224,38 +190,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           accessToken,
           refreshToken,
         });
-        return;
-      } catch (verifyError) {
-        // Token invalid, try refresh
-        const refreshed = await refreshAccessToken();
-        if (!refreshed) {
-          setAuthState(prev => ({ ...prev, isLoading: false }));
-        } else {
-          // After successful refresh, get user profile
-          try {
-            const userResponse = await apiClient.get(API_ENDPOINTS.USERS.ME);
-            const userData = userResponse.data;
-            setAuthState(prev => ({
-              ...prev,
-              isLoading: false,
-              isAuthenticated: true,
-              user: userData.data,
-            }));
-          } catch (userError) {
-            logger.warn('auth', 'Failed to get user after refresh', { error: (userError as Error).message });
-            await clearAuthData();
-          }
+      } catch (error) {
+        const errorMessage = (error as Error).message;
+
+        // Check if this is a retry manager conflict (not a real auth failure)
+        if (errorMessage.includes('Retry already in progress for token-refresh') && retryCount < 3) {
+          logger.debug('auth', `Token refresh in progress, retrying auth check (attempt ${retryCount + 1}/3)`);
+
+          // Wait for the ongoing refresh to complete and retry with backoff
+          setTimeout(() => {
+            checkAuthStatus(retryCount + 1);
+          }, 1000 * (retryCount + 1)); // Exponential backoff: 1s, 2s, 3s
+          return;
         }
+
+        // For actual auth failures or max retries exceeded, clear auth data
+        if (retryCount >= 3) {
+          logger.warn('auth', 'Max retry attempts exceeded for auth check');
+        }
+        logger.warn('auth', 'Auth status check failed - clearing auth data', { error: errorMessage });
+        await clearAuthData();
       }
     } catch (error) {
       logger.warn('auth', 'Auth status check failed', { error: (error as Error).message });
       setAuthState(prev => ({ ...prev, isLoading: false }));
     }
-  };
+  }, [clearAuthData]);
 
   useEffect(() => {
     checkAuthStatus();
-  }, []);
+  }, [checkAuthStatus]);
 
   // Set up authentication event listeners
   useEffect(() => {
@@ -286,7 +250,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       login,
       register,
       logout,
-      refreshAccessToken,
     }}>
       {children}
     </AuthContext.Provider>

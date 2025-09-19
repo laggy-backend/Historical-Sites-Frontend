@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hsr.dev98.Historical-Sites-Frontend"
     },
     "android": {
       "adaptiveIcon": {

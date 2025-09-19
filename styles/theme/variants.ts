@@ -33,6 +33,7 @@ export type ThemeColors = {
   successBackground: string;
   warning: string;
   warningBackground: string;
+  warningBorder?: string;
   error: string;
   errorBackground: string;
   info: string;

@@ -63,11 +63,10 @@ apiClient.interceptors.response.use(
     const requestKey = `${originalRequest.method}-${originalRequest.url}`;
 
     // Log the error (but reduce noise for expected auth failures)
-    const isAuthVerification = originalRequest.url?.includes('/verify/');
     const isAuthLogin = originalRequest.url?.includes('/token/') && originalRequest.method?.toLowerCase() === 'post';
     const is401 = error.response?.status === HTTP_STATUS.UNAUTHORIZED;
 
-    if (!(isAuthVerification && is401) && !(isAuthLogin && is401)) {
+    if (!(isAuthLogin && is401)) {
       // Only log unexpected errors or non-401 auth errors
       logger.apiError(
         originalRequest.method?.toUpperCase() || 'UNKNOWN',
@@ -77,8 +76,7 @@ apiClient.interceptors.response.use(
       );
     } else {
       // For expected auth failures, use debug level
-      const context = isAuthVerification ? 'Auth verification' : 'Login attempt';
-      logger.debug('api', `${context} failed (expected): ${error.message}`, {
+      logger.debug('api', `Login attempt failed (expected): ${error.message}`, {
         status: error.response?.status
       });
     }

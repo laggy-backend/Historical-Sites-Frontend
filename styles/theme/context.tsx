@@ -3,7 +3,7 @@
  * Industry standard approach using React Context
  */
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { useColorScheme } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { lightTheme, darkTheme, Theme, ThemeMode } from './variants';
@@ -42,7 +42,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   // Load saved theme preference on mount
   useEffect(() => {
     loadThemePreference();
-  }, []);
+  }, [loadThemePreference]);
 
   // Update theme when system theme changes (if using system theme)
   useEffect(() => {
@@ -51,7 +51,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     }
   }, [systemColorScheme, isSystemTheme]);
 
-  const loadThemePreference = async () => {
+  const loadThemePreference = useCallback(async () => {
     try {
       const savedPreference = await SecureStore.getItemAsync(THEME_STORAGE_KEY);
       if (savedPreference) {
@@ -71,7 +71,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
       logger.warn('theme', 'Failed to load theme preference', { error: (error as Error).message });
       setThemeMode('light');
     }
-  };
+  }, [systemColorScheme]);
 
   const saveThemePreference = async (mode: ThemeMode, useSystem: boolean) => {
     try {

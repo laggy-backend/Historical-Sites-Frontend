@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_ENDPOINTS } from '../../config';
 import apiClient, { apiHelpers } from '../../services/api';
@@ -289,7 +288,7 @@ export default function Profile() {
           }
           return prev - 1;
         });
-      }, 1000);
+      }, 1000) as any;
     }
     return () => {
       if (interval) {

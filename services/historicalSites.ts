@@ -17,6 +17,7 @@ import {
 import { MediaItem } from '../components/media/MediaPicker';
 import apiClient from './api';
 import { AxiosError } from 'axios';
+import { logger } from '../utils/logger';
 
 export const historicalSitesApi = {
   /**
@@ -79,16 +80,14 @@ export const historicalSitesApi = {
       });
       return response.data;
     } catch (error) {
-      console.error('Site creation API error:', error);
-      if (error instanceof Error) {
-        console.error('Error message:', error.message);
-      }
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as any;
-        console.error('Response status:', axiosError.response?.status);
-        console.error('Response data:', axiosError.response?.data);
-        console.error('Response headers:', axiosError.response?.headers);
-      }
+      const errorMessage = error instanceof Error ? error.message : 'Site creation failed';
+      logger.error('sites', 'Site creation API error', {
+        error: errorMessage,
+        ...(error instanceof AxiosError && {
+          status: error.response?.status,
+          responseData: error.response?.data
+        })
+      });
       throw error;
     }
   },

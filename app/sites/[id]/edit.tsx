@@ -5,7 +5,7 @@
  */
 
 import { StatusBar } from 'expo-status-bar';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Text,
   View,
@@ -313,9 +313,9 @@ export default function EditSite() {
     if (siteId && !isNaN(siteId)) {
       loadSiteData();
     }
-  }, []);
+  }, [siteId, loadSiteData]);
 
-  const loadSiteData = async () => {
+  const loadSiteData = useCallback(async () => {
     try {
       setIsLoadingSite(true);
       const response = await historicalSitesApi.getSite(siteId);
@@ -352,12 +352,17 @@ export default function EditSite() {
         router.back();
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load site data';
+      logger.error('sites', 'Failed to load site data for editing', {
+        error: errorMessage,
+        siteId
+      });
       Alert.alert('Error', 'Failed to load site data');
       router.back();
     } finally {
       setIsLoadingSite(false);
     }
-  };
+  }, [siteId, user, getCityName]);
 
   // Update form data with validation (reused from creation flow)
   const updateFormData = (updates: Partial<FormData>) => {
@@ -500,7 +505,12 @@ export default function EditSite() {
                 Alert.alert('Error', response.message || 'Failed to delete media');
               }
             } catch (error) {
-              console.error('Delete media error:', error);
+              const errorMessage = error instanceof Error ? error.message : 'Failed to delete media';
+              logger.error('media', 'Failed to delete media file', {
+                error: errorMessage,
+                mediaId: media.id,
+                siteId
+              });
               Alert.alert('Error', 'Failed to delete media');
             } finally {
               setIsLoading(false);
@@ -537,7 +547,12 @@ export default function EditSite() {
         Alert.alert('Error', response.message || 'Failed to update thumbnail');
       }
     } catch (error) {
-      console.error('Set thumbnail error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update thumbnail';
+      logger.error('media', 'Failed to set media thumbnail', {
+        error: errorMessage,
+        mediaId,
+        siteId
+      });
       Alert.alert('Error', 'Failed to update thumbnail');
     } finally {
       setIsLoading(false);
@@ -628,7 +643,12 @@ export default function EditSite() {
             );
           }
         } catch (mediaError) {
-          console.error('Media upload error:', mediaError);
+          const errorMessage = mediaError instanceof Error ? mediaError.message : 'Media upload failed';
+          logger.error('media', 'Media upload failed during site update', {
+            error: errorMessage,
+            siteId,
+            mediaCount: mediaItemsForUpload.length
+          });
           Alert.alert(
             'Partial Success',
             'Site was updated but media upload failed.',
@@ -644,7 +664,16 @@ export default function EditSite() {
       );
 
     } catch (error) {
-      console.error('Site update error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Site update failed';
+      logger.error('sites', 'Site update error', {
+        error: errorMessage,
+        siteId,
+        updateData: {
+          name_en: formData.name_en,
+          name_ar: formData.name_ar,
+          hasNewMedia: newMediaItems.length > 0
+        }
+      });
 
       const parsedError = parseApiError(error);
 
@@ -929,8 +958,6 @@ export default function EditSite() {
             style={{ marginTop: theme.spacing.sm }}
           >
             {formData.existingMedia.map((media, index) => {
-              // Debug: Log the media object to see its structure
-              console.log('Media object:', media);
 
               // Try different possible field names for file type
               const fileType = media.file_type || media.type || media.mime_type || '';
@@ -952,7 +979,11 @@ export default function EditSite() {
                             style={styles.existingMediaImage}
                             contentFit="cover"
                             onError={(error) => {
-                              console.log('Image load error:', error, 'URL:', fileUrl);
+                              logger.warn('media', 'Image failed to load in media editor', {
+                                error: error ? error.toString() : 'Unknown image load error',
+                                fileUrl,
+                                mediaId: media.id
+                              });
                             }}
                           />
                         ) : isVideo ? (

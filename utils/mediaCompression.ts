@@ -4,6 +4,7 @@
  */
 
 import * as ImageManipulator from 'expo-image-manipulator';
+import { logger } from './logger';
 
 export interface CompressionResult {
   uri: string;
@@ -85,14 +86,20 @@ export async function compressImage(
       success: true,
     };
   } catch (error) {
-    console.error('Image compression failed:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown compression error';
+    logger.error('media', 'Image compression failed', {
+      error: errorMessage,
+      uri,
+      originalSize,
+      options
+    });
     return {
       uri,
       originalSize,
       compressedSize: originalSize,
       compressionRatio: 1,
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown compression error',
+      error: errorMessage,
     };
   }
 }

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FilterBar } from '../../components/search/FilterBar';
@@ -24,19 +24,14 @@ export default function Explore() {
     sites,
     totalCount,
     isLoading,
-    isLoadingMore,
     isRefreshing,
+    isLoadingMore,
     error,
     hasNextPage,
     loadMore,
     refresh,
     getActiveFilterCount
   } = useSearch();
-
-  // Simple refresh on component mount/navigation
-  useEffect(() => {
-    refresh();
-  }, []);
 
   const styles = createStyles((theme) => ({
     container: {

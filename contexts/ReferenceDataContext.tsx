@@ -55,7 +55,7 @@ export const ReferenceDataProvider: React.FC<ReferenceDataProviderProps> = ({ ch
   const [error, setError] = useState<string | null>(null);
 
   // Load all reference data on mount
-  const loadReferenceData = async () => {
+  const loadReferenceData = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -77,7 +77,7 @@ export const ReferenceDataProvider: React.FC<ReferenceDataProviderProps> = ({ ch
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Helper functions
   const getCityName = useCallback((id: number): string => {
@@ -121,7 +121,7 @@ export const ReferenceDataProvider: React.FC<ReferenceDataProviderProps> = ({ ch
   // Refresh functions
   const refreshData = useCallback(async (): Promise<void> => {
     await loadReferenceData();
-  }, []);
+  }, [loadReferenceData]);
 
   const refreshCities = useCallback(async (): Promise<void> => {
     if (!data) return;

@@ -20,8 +20,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({ disabled = false }) => {
   const { theme } = useTheme();
   const {
     filters,
+    searchQuery,
     updateFilters,
-    removeFilter,
     clearFilters
   } = useSearch();
 
@@ -51,7 +51,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({ disabled = false }) => {
     updateFilters({ search });
   };
 
-
   // Handle sort changes
   const handleSortChange = (sortBy: typeof filters.sortBy) => {
     updateFilters({ sortBy });
@@ -59,11 +58,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({ disabled = false }) => {
 
   // Active filter removal handlers
   const handleRemoveSearch = () => {
-    removeFilter('search');
+    updateFilters({ search: '' });
   };
 
   const handleRemoveSort = () => {
-    removeFilter('sort');
+    updateFilters({ sortBy: 'newest' });
   };
 
   return (
@@ -71,8 +70,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({ disabled = false }) => {
       {/* Search Bar */}
       <View style={styles.searchSection}>
         <SearchBar
-          value={filters.search}
-          onSearch={handleSearchChange}
+          value={searchQuery}
+          onChangeText={handleSearchChange}
           disabled={disabled}
         />
       </View>

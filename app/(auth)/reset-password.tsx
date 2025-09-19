@@ -143,7 +143,7 @@ export default function ResetPassword() {
             </Text>
             <Text style={styles.instructionText}>
               Please check your inbox and follow the instructions in the email to reset your password.
-              Don't forget to check your spam folder if you don't see it.
+              Don&apos;t forget to check your spam folder if you don&apos;t see it.
             </Text>
 
             <TouchableOpacity
@@ -157,7 +157,7 @@ export default function ResetPassword() {
           </View>
 
           <View style={styles.footer}>
-            <Text style={createTypographyStyle(theme, 'body')}>Didn't receive an email? </Text>
+            <Text style={createTypographyStyle(theme, 'body')}>Didn&apos;t receive an email? </Text>
             <TouchableOpacity onPress={() => {
               setIsSuccess(false);
               setEmail('');

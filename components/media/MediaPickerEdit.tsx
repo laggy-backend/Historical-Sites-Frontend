@@ -28,7 +28,8 @@ import {
   useTheme
 } from '../../styles';
 import { VideoPreview } from './VideoPreview';
-import { compressMedia, getFileSize, getCompressionSummary, CompressionResult } from '../../utils/mediaCompression';
+import type { CompressionResult } from '../../utils/mediaCompression';
+import { compressMedia, getFileSize, getCompressionSummary } from '../../utils/mediaCompression';
 export interface MediaItemEdit {
   uri: string;
   name: string;
@@ -248,13 +249,16 @@ export const MediaPickerEdit: React.FC<MediaPickerEditProps> = ({
     const invalidItems: string[] = [];
     const compressionResults: CompressionResult[] = [];
 
+    // Process items asynchronously to keep UI responsive
     for (const [index, asset] of assets.entries()) {
-      setCompressionProgress(`Processing ${index + 1}/${assets.length}...`);
+      const fileName = asset.fileName || asset.uri.split('/').pop() || `${asset.type === 'image' ? 'image' : 'video'}_${Date.now()}`;
+      setCompressionProgress(`Processing ${index + 1}/${assets.length}: ${fileName}`);
+
+      // Yield control back to UI thread
+      await new Promise(resolve => setTimeout(resolve, 0));
+
       const isImage = asset.type === 'image';
       const maxSize = isImage ? 10 * 1024 * 1024 : 100 * 1024 * 1024; // 10MB for images, 100MB for videos
-
-      // Generate a name from URI if not provided
-      const fileName = asset.fileName || asset.uri.split('/').pop() || `${isImage ? 'image' : 'video'}_${Date.now()}`;
 
       // Validate file type before processing
       const extension = fileName.toLowerCase().split('.').pop() || '';
@@ -291,7 +295,7 @@ export const MediaPickerEdit: React.FC<MediaPickerEditProps> = ({
       // Compress media before validation (only for images)
       let compressionResult;
       if (isImage) {
-        setCompressionProgress(`Compressing ${fileName}...`);
+        setCompressionProgress(`Compressing ${index + 1}/${assets.length}: ${fileName}`);
         compressionResult = await compressMedia(
           asset.uri,
           asset.mimeType || 'image/jpeg',
@@ -315,6 +319,9 @@ export const MediaPickerEdit: React.FC<MediaPickerEditProps> = ({
       }
 
       compressionResults.push(compressionResult);
+
+      // Yield control after compression to keep UI responsive
+      await new Promise(resolve => setTimeout(resolve, 0));
 
       // Use compressed URI and size for further processing
       const finalUri = compressionResult.success ? compressionResult.uri : asset.uri;
@@ -548,3 +555,5 @@ export const MediaPickerEdit: React.FC<MediaPickerEditProps> = ({
     </View>
   );
 };
+
+export default MediaPickerEdit;

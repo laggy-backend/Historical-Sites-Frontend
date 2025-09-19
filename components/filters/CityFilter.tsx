@@ -4,7 +4,7 @@
  * Follows existing styling patterns
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Text, TouchableOpacity, Modal, View, FlatList, Pressable, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,20 +38,37 @@ export const CityFilter: React.FC<CityFilterProps> = ({
   const { data } = useReferenceData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const searchTimeoutRef = useRef<any>(null);
 
-  const cities = data?.cities || [];
+  // Debounce search query
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
 
-  // Filter cities based on search query
+    searchTimeoutRef.current = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  // Filter cities based on debounced search query
   const filteredCities = useMemo(() => {
     const citiesList = data?.cities || [];
-    if (!searchQuery.trim()) return citiesList;
+    if (!debouncedSearchQuery.trim()) return citiesList;
 
-    const query = searchQuery.toLowerCase().trim();
+    const query = debouncedSearchQuery.toLowerCase().trim();
     return citiesList.filter(city =>
       city.name_en.toLowerCase().includes(query) ||
       city.name_ar.includes(query)
     );
-  }, [data?.cities, searchQuery]);
+  }, [data?.cities, debouncedSearchQuery]);
 
   const styles = createStyles((theme) => ({
     filterButton: {
@@ -150,11 +167,13 @@ export const CityFilter: React.FC<CityFilterProps> = ({
     onCityChange(city?.name_en);
     setIsModalOpen(false);
     setSearchQuery(''); // Clear search when modal closes
+    setDebouncedSearchQuery(''); // Clear debounced search immediately
   };
 
   const handleModalClose = () => {
     setIsModalOpen(false);
     setSearchQuery(''); // Clear search when modal closes
+    setDebouncedSearchQuery(''); // Clear debounced search immediately
   };
 
   const renderCityItem = ({ item }: { item: City }) => {
@@ -258,10 +277,10 @@ export const CityFilter: React.FC<CityFilterProps> = ({
                   </TouchableOpacity>
                 }
                 ListEmptyComponent={
-                  searchQuery.trim() ? (
+                  debouncedSearchQuery.trim() ? (
                     <View style={styles.noResultsContainer}>
                       <Text style={styles.noResultsText}>
-                        No cities found matching &ldquo;{searchQuery}&rdquo;
+                        No cities found matching &ldquo;{debouncedSearchQuery}&rdquo;
                       </Text>
                     </View>
                   ) : null

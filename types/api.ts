@@ -29,22 +29,6 @@ export interface ApiResponse<T = any> {
   };
 }
 
-export interface AuthResponse {
-  success: boolean;
-  message: string;
-  data: {
-    user: {
-      id: number;
-      email: string;
-      role: 'visitor' | 'contributor' | 'moderator' | 'admin';
-      created_at: string;
-    };
-    tokens: {
-      access: string;
-      refresh: string;
-    };
-  };
-}
 
 export interface UserProfile {
   id: number;

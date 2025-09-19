@@ -1,10 +1,12 @@
 /**
  * Search Bar Component
- * Text input for searching historical sites with debouncing
- * Follows existing styling patterns from the codebase
+ * Modern React Native search input following 2025 best practices
+ * - Simple controlled component (no internal debouncing)
+ * - Debouncing handled by parent context with useDeferredValue
+ * - Clean, focused responsibility
  */
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { TextInput, View, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -18,39 +20,27 @@ import {
 
 interface SearchBarProps {
   value: string;
-  onSearch: (text: string) => void;
+  onChangeText: (text: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  onSubmit?: () => void;
 }
 
 export const SearchBar: React.FC<SearchBarProps> = ({
   value,
-  onSearch,
+  onChangeText,
   placeholder = 'Search historical sites...',
-  disabled = false
+  disabled = false,
+  onSubmit
 }) => {
   const { theme } = useTheme();
-  const [localValue, setLocalValue] = useState(value);
-
-  // Sync with external value changes
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  // Debounced search effect
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (localValue !== value) {
-        onSearch(localValue);
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [localValue, onSearch, value]);
 
   const handleClear = () => {
-    setLocalValue('');
-    onSearch('');
+    onChangeText('');
+  };
+
+  const handleSubmitEditing = () => {
+    onSubmit?.();
   };
 
   const styles = createStyles((theme) => ({
@@ -64,7 +54,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     input: {
       ...createInputStyle(theme, 'default', 'md', false, false, disabled),
       ...createInputTextStyle(theme, 'md', disabled),
-      paddingRight: localValue ? theme.spacing.xl + theme.spacing.lg : theme.spacing.lg,
+      paddingRight: value ? theme.spacing.xl + theme.spacing.lg : theme.spacing.lg,
       flex: 1,
     },
     searchIcon: {
@@ -97,15 +87,17 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           style={[styles.input, styles.inputWithIcon]}
           placeholder={placeholder}
           placeholderTextColor={getPlaceholderColor(theme)}
-          value={localValue}
-          onChangeText={setLocalValue}
+          value={value}
+          onChangeText={onChangeText}
+          onSubmitEditing={handleSubmitEditing}
           editable={!disabled}
           returnKeyType="search"
           autoCapitalize="none"
           autoCorrect={false}
+          clearButtonMode="never"
         />
 
-        {localValue.length > 0 && (
+        {value.length > 0 && (
           <TouchableOpacity
             style={styles.clearButton}
             onPress={handleClear}

@@ -5,7 +5,7 @@
  */
 
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Text,
   View,
@@ -52,6 +52,7 @@ import {
 } from '../../utils/validation';
 import { parseApiError, mapApiFieldToFormField } from '../../utils/errorParser';
 import { canCreateContent } from '../../utils/permissions';
+import { logger } from '../../utils/logger';
 
 type FormStep = 'basic' | 'location' | 'metadata' | 'review';
 
@@ -92,6 +93,51 @@ export default function Upload() {
   const [errors, setErrors] = useState<SiteFormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  // Debounced validation
+  const validationTimeoutRef = useRef<any>(null);
+
+  // Cleanup validation timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (validationTimeoutRef.current) {
+        clearTimeout(validationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const debouncedValidation = useCallback((fieldName: string, value: string) => {
+    if (validationTimeoutRef.current) {
+      clearTimeout(validationTimeoutRef.current);
+    }
+
+    validationTimeoutRef.current = setTimeout(() => {
+      const newErrors = { ...errors };
+      delete newErrors[fieldName as keyof SiteFormErrors];
+
+      let error: string | undefined;
+      switch (fieldName) {
+        case 'name_en':
+          error = validateEnglishName(value);
+          break;
+        case 'name_ar':
+          error = validateArabicName(value);
+          break;
+        case 'description_en':
+          error = validateEnglishDescription(value);
+          break;
+        case 'description_ar':
+          error = validateArabicDescription(value);
+          break;
+      }
+
+      if (error) {
+        newErrors[fieldName as keyof SiteFormErrors] = error;
+      }
+
+      setErrors(newErrors);
+    }, 500);
+  }, [errors]);
 
   const styles = createStyles((theme) => ({
     container: {
@@ -275,29 +321,22 @@ export default function Upload() {
   const updateFormData = (updates: Partial<FormData>) => {
     setFormData(prev => ({ ...prev, ...updates }));
 
-    // Clear and re-validate related errors when updating fields
-    const newErrors = { ...errors };
-
+    // Handle text fields with debounced validation
     if ('name_en' in updates) {
-      delete newErrors.name_en;
-      const error = validateEnglishName(updates.name_en || '');
-      if (error) newErrors.name_en = error;
+      debouncedValidation('name_en', updates.name_en || '');
     }
     if ('name_ar' in updates) {
-      delete newErrors.name_ar;
-      const error = validateArabicName(updates.name_ar || '');
-      if (error) newErrors.name_ar = error;
+      debouncedValidation('name_ar', updates.name_ar || '');
     }
     if ('description_en' in updates) {
-      delete newErrors.description_en;
-      const error = validateEnglishDescription(updates.description_en || '');
-      if (error) newErrors.description_en = error;
+      debouncedValidation('description_en', updates.description_en || '');
     }
     if ('description_ar' in updates) {
-      delete newErrors.description_ar;
-      const error = validateArabicDescription(updates.description_ar || '');
-      if (error) newErrors.description_ar = error;
+      debouncedValidation('description_ar', updates.description_ar || '');
     }
+
+    // Handle non-text fields with immediate validation/clearing
+    const newErrors = { ...errors };
     if ('coordinate' in updates) {
       delete newErrors.coordinate;
     }
@@ -306,13 +345,12 @@ export default function Upload() {
     }
     if ('mediaItems' in updates) {
       delete newErrors.mediaItems;
-      // Media items are now optional, no validation needed
-      // if (!updates.mediaItems || updates.mediaItems.length === 0) {
-      //   newErrors.mediaItems = 'At least one image or video is required';
-      // }
     }
 
-    setErrors(newErrors);
+    // Only update errors for non-text fields immediately
+    if ('coordinate' in updates || 'selectedCity' in updates || 'mediaItems' in updates) {
+      setErrors(newErrors);
+    }
   };
 
   const validateCurrentStep = (): boolean => {
@@ -447,6 +485,7 @@ export default function Upload() {
       }
 
       const siteId = siteResponse.data.id;
+      logger.info('sites', 'Site created successfully', { siteId, siteData });
 
       // Step 2: Upload media files if any
       if (formData.mediaItems.length > 0) {
@@ -454,22 +493,30 @@ export default function Upload() {
           const mediaResponse = await historicalSitesApi.uploadSiteMedia(siteId, formData.mediaItems);
 
           if (!mediaResponse.success) {
-            console.warn('Media upload failed, but site was created successfully');
+            logger.warn('media', 'Media upload failed after site creation', { siteId });
             Alert.alert(
               'Partial Success',
               'Site was created but some media files failed to upload. You can add them later.',
               [{ text: 'OK' }]
             );
           } else {
+            logger.info('sites', 'Site created successfully with media', { siteId, mediaCount: formData.mediaItems.length });
           }
         } catch (mediaError) {
-          console.error('Media upload error:', mediaError);
+          const errorMessage = mediaError instanceof Error ? mediaError.message : 'Media upload failed';
+          logger.error('media', 'Media upload error after site creation', {
+            siteId,
+            error: errorMessage,
+            mediaCount: formData.mediaItems.length
+          });
           Alert.alert(
             'Partial Success',
             'Site was created but media upload failed. You can add media files later.',
             [{ text: 'OK' }]
           );
         }
+      } else {
+        logger.info('sites', 'Site created successfully without media', { siteId });
       }
 
       // Clear the form after successful creation
@@ -480,7 +527,17 @@ export default function Upload() {
       // Auto-navigate to the created site
       router.push(`/sites/${siteId}?from=creation`);
     } catch (error) {
-      console.error('Site creation error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Site creation failed';
+      logger.error('sites', 'Site creation error', {
+        error: errorMessage,
+        formData: {
+          name_en: formData.name_en,
+          name_ar: formData.name_ar,
+          citySelected: formData.selectedCity,
+          hasLocation: !!formData.coordinate,
+          mediaCount: formData.mediaItems.length
+        }
+      });
 
       const parsedError = parseApiError(error);
 

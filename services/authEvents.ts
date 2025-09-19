@@ -4,6 +4,8 @@
  * when authentication fails without creating circular dependencies
  */
 
+import { logger } from '../utils/logger';
+
 type AuthEventType = 'FORCE_LOGOUT' | 'TOKEN_REFRESHED' | 'AUTH_ERROR';
 
 interface AuthEvent {
@@ -41,7 +43,7 @@ class AuthEventManager {
       timestamp: Date.now()
     };
 
-    console.log(`[AuthEvents] Emitting ${eventType}`, event);
+    logger.debug('events', `Emitting auth event: ${eventType}`, { data, timestamp: event.timestamp });
 
     const listeners = this.listeners.get(eventType);
     if (listeners) {
@@ -49,7 +51,11 @@ class AuthEventManager {
         try {
           callback(data);
         } catch (error) {
-          console.error(`[AuthEvents] Error in ${eventType} listener:`, error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error in auth event listener';
+          logger.error('events', `Error in auth event listener for ${eventType}`, {
+            error: errorMessage,
+            eventType
+          });
         }
       });
     }

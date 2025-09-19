@@ -31,7 +31,7 @@ import {
 } from '../../../styles';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useReferenceData } from '../../../contexts/ReferenceDataContext';
-import { historicalSitesApi, siteHelpers } from '../../../services/historicalSites';
+import { historicalSitesApi } from '../../../services/historicalSites';
 import { HistoricalSite } from '../../../types/historicalSites';
 import { AxiosError } from 'axios';
 import { apiHelpers } from '../../../services/api';
@@ -230,13 +230,6 @@ export default function SiteDetail() {
     }
   }))(theme);
 
-  useEffect(() => {
-    if (siteId && !isNaN(siteId)) {
-      loadSiteDetails();
-    }
-  }, [siteId, loadSiteDetails]);
-
-
   const loadSiteDetails = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -264,6 +257,12 @@ export default function SiteDetail() {
       setIsLoading(false);
     }
   }, [siteId]);
+
+  useEffect(() => {
+    if (siteId && !isNaN(siteId)) {
+      loadSiteDetails();
+    }
+  }, [siteId, loadSiteDetails]);
 
   const handleBack = () => {
     // If coming from site creation, always go to explore
